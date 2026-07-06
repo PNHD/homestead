@@ -1,25 +1,24 @@
 // App-level state types (the user's plan). Game data lives in ./data/gameData.ts.
+import type { Job } from "./data/gameData";
 
-export type SellChannel = "merchant" | "restaurant";
-
-/** A crafting queue slot group: a product made by a retainer at some skill level. */
+/**
+ * A crafting queue slot: one product made by one assigned retainer.
+ * The output rate is fixed by that retainer's skill level for the product's
+ * job (Cook/Kilnwork/Brewing) — there is no manual level or slot count.
+ * To run the same product in several slots, add (or duplicate) more lines.
+ */
 export interface CraftLine {
   id: string;
   productName: string;
-  retainer: string; // "" = unassigned (still runs at chosen level)
-  level: number; // retainer skill level 1..10
-  slots: number; // number of identical queue slots running this
-  channel: SellChannel; // where the output is sold
+  retainer: string; // "" = unassigned (line is inactive until staffed)
   bestSeller: boolean; // this week's best-seller (+20%)
 }
 
-/** A gathering slot: raw material collected via Fishing/Hunting/Mining/Forestry. */
+/** A gathering slot: one raw material collected by one assigned retainer. */
 export interface GatherLine {
   id: string;
   materialName: string;
-  retainer: string;
-  level: number;
-  slots: number;
+  retainer: string; // "" = unassigned
 }
 
 /** A farm field growing a crop. */
@@ -43,10 +42,14 @@ export interface Order {
   done: boolean;
 }
 
-/** Per-product manual price override (for items missing data in the source sheets). */
+/**
+ * Per-product manual price override (for items missing data in the sheets).
+ * inn   = Inn Unit Sale Price (automatic passive income)
+ * trade = Trade for Profit Price (manual — you sell to an NPC yourself)
+ */
 export interface PriceOverride {
-  merchant?: number;
-  restaurant?: number;
+  inn?: number;
+  trade?: number;
 }
 
 export interface PlanState {
@@ -62,6 +65,14 @@ export interface PlanState {
   industrySlots: Record<string, number>;
   /** manual price overrides keyed by product name */
   priceOverrides: Record<string, PriceOverride>;
+  /** user's real retainer skill levels, overriding the spreadsheet snapshot */
+  retainerLevels: Record<string, Partial<Record<Job, number>>>;
+  /** user's recruited/not overrides keyed by retainer name */
+  recruitedOverride: Record<string, boolean>;
+  /** epoch ms since which production has been accumulating (Trade tracker) */
+  trackingSince: number;
+  /** per-product epoch ms of the last "sold" reset (Trade tracker) */
+  soldAt: Record<string, number>;
 }
 
 export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = {
@@ -80,4 +91,8 @@ export const emptyPlan = (): PlanState => ({
   runwayTargetH: 24,
   industrySlots: { ...DEFAULT_INDUSTRY_SLOTS },
   priceOverrides: {},
+  retainerLevels: {},
+  recruitedOverride: {},
+  trackingSince: Date.now(),
+  soldAt: {},
 });

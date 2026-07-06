@@ -1,8 +1,15 @@
-import { MATERIALS, CROPS } from "../data/gameData";
+import { useState } from "react";
+import { MATERIALS, CROPS, type Job } from "../data/gameData";
 import type { PlanState, GatherLine, FarmLine } from "../types";
 import { uid } from "../utils/storage";
-import { computeMaterialFlows, GATHERABLE_MATERIALS, fmt } from "../utils/calc";
-import { NumberInput, Select, StatusChip, SectionTitle } from "./Ui";
+import {
+  computeMaterialFlows,
+  GATHERABLE_MATERIALS,
+  recruitedRetainersFor,
+  orderableItems,
+  fmt,
+} from "../utils/calc";
+import { NumberInput, Select, Combobox, StatusChip, SectionTitle } from "./Ui";
 
 const GATHER_OPTIONS = GATHERABLE_MATERIALS.map((m) => ({
   value: m.name,
@@ -13,6 +20,8 @@ const CROP_OPTIONS = [...CROPS]
   .sort((a, b) => a.name.localeCompare(b.name))
   .map((c) => ({ value: c.name, label: `${c.name} (${fmt(c.yieldPerHrFarm ?? 0, 0)}/hr/farm)` }));
 
+const ITEM_OPTIONS = orderableItems().map((n) => ({ value: n, label: n }));
+
 export default function MaterialsTab({
   plan,
   setPlan,
@@ -21,6 +30,7 @@ export default function MaterialsTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const flows = computeMaterialFlows(plan);
+  const [addItem, setAddItem] = useState("");
 
   // gather line helpers
   const addGather = () =>
@@ -28,7 +38,7 @@ export default function MaterialsTab({
       ...p,
       gatherLines: [
         ...p.gatherLines,
-        { id: uid(), materialName: GATHERABLE_MATERIALS[0]?.name ?? "", retainer: "", level: 1, slots: 1 },
+        { id: uid(), materialName: GATHERABLE_MATERIALS[0]?.name ?? "", retainer: "" },
       ],
     }));
   const updGather = (id: string, patch: Partial<GatherLine>) =>
@@ -65,22 +75,36 @@ export default function MaterialsTab({
             </p>
           ) : (
             <div className="space-y-2">
-              {plan.gatherLines.map((g) => (
-                <div key={g.id} className="flex items-center gap-2">
-                  <Select
-                    value={g.materialName}
-                    onChange={(v) => updGather(g.id, { materialName: v })}
-                    options={GATHER_OPTIONS}
-                    className="flex-1"
-                  />
-                  <NumberInput value={g.level} min={1} max={10} onChange={(n) => updGather(g.id, { level: n })} className="w-16" />
-                  <NumberInput value={g.slots} min={0} onChange={(n) => updGather(g.id, { slots: n })} className="w-16" />
-                  <button className="btn px-2 py-1" onClick={() => rmGather(g.id)}>
-                    ✕
-                  </button>
-                </div>
-              ))}
-              <div className="text-xs text-gray-500">columns: material · level · slots</div>
+              {plan.gatherLines.map((g) => {
+                const job = MATERIALS[g.materialName]?.job as Job | undefined;
+                const retOpts = [
+                  { value: "", label: "— assign retainer —" },
+                  ...(job ? recruitedRetainersFor(job, plan) : []).map((r) => ({
+                    value: r.name,
+                    label: `${r.name} · L${r.level}`,
+                  })),
+                ];
+                return (
+                  <div key={g.id} className="flex items-center gap-2">
+                    <Select
+                      value={g.materialName}
+                      onChange={(v) => updGather(g.id, { materialName: v })}
+                      options={GATHER_OPTIONS}
+                      className="flex-1"
+                    />
+                    <Select
+                      value={g.retainer}
+                      onChange={(v) => updGather(g.id, { retainer: v })}
+                      options={retOpts}
+                      className="flex-1"
+                    />
+                    <button className="btn px-2 py-1" onClick={() => rmGather(g.id)}>
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="text-xs text-gray-500">material · retainer (rate from their skill level)</div>
             </div>
           )}
         </div>
@@ -126,6 +150,21 @@ export default function MaterialsTab({
             Runway target (h)
             <NumberInput value={plan.runwayTargetH} min={1} onChange={setRunway} className="w-20" />
           </label>
+        </div>
+
+        <div className="card mb-3 flex flex-wrap items-center gap-2 p-3">
+          <span className="text-xs text-gray-400">Add an item you have in stock:</span>
+          <Combobox
+            value={addItem}
+            onChange={(v) => {
+              if (v) setPlan((p) => ({ ...p, inventory: { ...p.inventory, [v]: p.inventory[v] ?? 0 } }));
+              setAddItem("");
+            }}
+            options={ITEM_OPTIONS}
+            placeholder="Search any material or dish…"
+            className="w-72"
+          />
+          <span className="text-xs text-gray-500">then set its quantity in the table below.</span>
         </div>
 
         {flows.length === 0 ? (

@@ -110,7 +110,7 @@ export default function DataTab({
       </div>
 
       <div>
-        <SectionTitle hint="These products have no price in any source sheet — enter the in-game value to include them everywhere.">
+        <SectionTitle hint="These products have no price in any source sheet — enter the in-game Inn & Trade price to include them everywhere.">
           Manual prices ({PRODUCTS_MISSING_PRICE.length} items missing data)
         </SectionTitle>
         <div className="card overflow-x-auto">
@@ -119,8 +119,8 @@ export default function DataTab({
               <tr className="border-b border-line">
                 <th className="th">Product</th>
                 <th className="th">Industry</th>
-                <th className="th text-right w-32">Merchant $</th>
-                <th className="th text-right w-32">Restaurant $</th>
+                <th className="th text-right w-32">Inn $ (auto)</th>
+                <th className="th text-right w-32">Trade $ (manual)</th>
               </tr>
             </thead>
             <tbody>
@@ -132,17 +132,17 @@ export default function DataTab({
                     <td className="td text-gray-400">{p.industry}</td>
                     <td className="td text-right">
                       <NumberInput
-                        value={ov.merchant ?? 0}
+                        value={ov.inn ?? 0}
                         min={0}
-                        onChange={(n) => setOverride(p.name, { merchant: n || undefined })}
+                        onChange={(n) => setOverride(p.name, { inn: n || undefined })}
                         className="w-24 text-right"
                       />
                     </td>
                     <td className="td text-right">
                       <NumberInput
-                        value={ov.restaurant ?? 0}
+                        value={ov.trade ?? 0}
                         min={0}
-                        onChange={(n) => setOverride(p.name, { restaurant: n || undefined })}
+                        onChange={(n) => setOverride(p.name, { trade: n || undefined })}
                         className="w-24 text-right"
                       />
                     </td>

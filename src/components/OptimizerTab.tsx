@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { PlanState, SellChannel } from "../types";
+import type { PlanState } from "../types";
 import { optimizePlan, computeSummary, computeMaterialFlows, fmt, PRODUCT_BY_NAME } from "../utils/calc";
-import { NumberInput, Select, Money, SectionTitle } from "./Ui";
+import { NumberInput, Money, SectionTitle } from "./Ui";
 
 function industryOf(name: string): string {
   return PRODUCT_BY_NAME[name]?.industry ?? "—";
@@ -16,14 +16,12 @@ export default function OptimizerTab({
   plan: PlanState;
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
-  const [level, setLevel] = useState(4);
-  const [channel, setChannel] = useState<SellChannel>("restaurant");
   const [bestSeller, setBestSeller] = useState(false);
   const [ordersFirst, setOrdersFirst] = useState(true);
 
   const result = useMemo(
-    () => optimizePlan(plan, { level, channel, bestSeller, ordersFirst }),
-    [plan, level, channel, bestSeller, ordersFirst]
+    () => optimizePlan(plan, { bestSeller, ordersFirst }),
+    [plan, bestSeller, ordersFirst]
   );
 
   const current = useMemo(() => {
@@ -49,22 +47,6 @@ export default function OptimizerTab({
       </SectionTitle>
 
       <div className="card flex flex-wrap items-end gap-4 p-4">
-        <label className="text-xs text-gray-400">
-          Level
-          <NumberInput value={level} min={1} max={10} onChange={(n) => setLevel(Math.min(10, Math.max(1, n)))} className="mt-1 w-20" />
-        </label>
-        <label className="text-xs text-gray-400">
-          Sell at
-          <Select<SellChannel>
-            value={channel}
-            onChange={setChannel}
-            options={[
-              { value: "restaurant", label: "Restaurant" },
-              { value: "merchant", label: "Merchant" },
-            ]}
-            className="mt-1 w-36"
-          />
-        </label>
         {CRAFT_INDUSTRIES.map((ind) => (
           <label key={ind} className="text-xs text-gray-400">
             {ind} slots
@@ -107,9 +89,9 @@ export default function OptimizerTab({
         <table className="w-full min-w-[560px]">
           <thead>
             <tr className="border-b border-line">
+              <th className="th w-10">Slot</th>
               <th className="th">Industry</th>
               <th className="th">Product</th>
-              <th className="th text-right">Slots</th>
               <th className="th">Retainer</th>
             </tr>
           </thead>
@@ -121,12 +103,12 @@ export default function OptimizerTab({
                 </td>
               </tr>
             ) : (
-              result.lines.map((l) => (
+              result.lines.map((l, i) => (
                 <tr key={l.id} className="border-b border-line/50 last:border-0">
+                  <td className="td text-gray-500">{i + 1}</td>
                   <td className="td text-gray-400">{industryOf(l.productName)}</td>
                   <td className="td font-medium">{l.productName}</td>
-                  <td className="td text-right tabular-nums">{l.slots}</td>
-                  <td className="td text-gray-400">{l.retainer || "—"}</td>
+                  <td className={`td ${l.retainer ? "text-gray-300" : "text-amber-400"}`}>{l.retainer || "unstaffed"}</td>
                 </tr>
               ))
             )}

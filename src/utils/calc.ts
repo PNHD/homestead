@@ -1,10 +1,11 @@
 // Revenue / income / material-flow / labor engine.
-// All formulas are ported from the official WWM Homestead Planner v2.0 spreadsheet:
-//   output/hr   = base_rate(job) * efficiency(level)            (Rates & Efficiency sheet)
-//   draw/hr     = output/hr * recipe_amount                     (Queues sheet)
-//   revenue/hr  = output/hr * sale_price                        (Weekly Plan / Recipes sheet)
-//   profit/hr   = revenue/hr - input_cost * output/hr           (Recipes: Profit/Unit * Produce/hr)
-// Nothing here invents numbers; it only combines the sheet's constants.
+// Formulas are ported from the official WWM Homestead Planner v2.0 spreadsheet:
+//   output/hr   = base_rate(job) * efficiency(retainer level)     (Rates & Efficiency)
+//   draw/hr     = output/hr * recipe_amount                       (Queues)
+//   revenue/hr  = output/hr * sale_price                          (Weekly Plan / Recipes)
+//   profit/hr   = output/hr * (price - input_cost)                (Recipes: Profit/Unit)
+// A production line = ONE queue slot worked by ONE retainer. The output rate is
+// fixed by that retainer's skill level for the product's job — never typed by hand.
 
 import {
   BASE_RATES,
@@ -19,7 +20,7 @@ import {
   type Product,
   type Job,
 } from "../data/gameData";
-import type { CraftLine, PlanState, SellChannel } from "../types";
+import type { CraftLine, PlanState } from "../types";
 
 // ---- lookups -------------------------------------------------------------
 export const PRODUCT_BY_NAME: Record<string, Product> = Object.fromEntries(
@@ -32,6 +33,9 @@ export const RETAINER_BY_NAME = Object.fromEntries(RETAINERS.map((r) => [r.name,
 export const GATHERABLE_MATERIALS = Object.values(MATERIALS).filter(
   (m) => m.job && ["Fishing", "Hunting", "Mining", "Forestry"].includes(m.job)
 );
+
+export type PriceOverrides = Record<string, { inn?: number; trade?: number }>;
+export type RetainerLevels = Record<string, Partial<Record<Job, number>>>;
 
 // ---- efficiency ----------------------------------------------------------
 export interface Eff {
@@ -46,68 +50,68 @@ export function efficiency(level: number): Eff {
   return { mult: EFF_MULT_ESTIMATED[lv] ?? EFF_MULT_ESTIMATED[10], estimated: true };
 }
 
-/** Items produced per hour for one slot of a job at a given skill level. */
+/** Items produced per hour by one retainer at a job & skill level. */
 export function outputPerHr(job: Job | string, level: number): number {
   const base = BASE_RATES[job] ?? 1;
   return base * efficiency(level).mult;
 }
 
-// ---- price ---------------------------------------------------------------
-export type PriceOverrides = Record<string, { merchant?: number; restaurant?: number }>;
+/** A retainer's effective skill level for a job — user override wins over the sheet. */
+export function retainerJobLevel(name: string, job: Job | undefined, levels?: RetainerLevels): number {
+  if (!name || !job) return 0;
+  const ov = levels?.[name]?.[job];
+  if (ov != null) return ov;
+  return RETAINER_BY_NAME[name]?.skills[job] ?? 0;
+}
 
-export function salePrice(
-  p: Product,
-  channel: SellChannel,
-  bestSeller: boolean,
-  overrides: PriceOverrides = {}
-): number {
-  const ov = overrides[p.name];
-  const merchant = ov?.merchant ?? p.merchant;
-  const restaurant = ov?.restaurant ?? p.restaurant;
-  const base = channel === "restaurant" ? restaurant ?? merchant ?? 0 : merchant ?? restaurant ?? 0;
+// ---- price ---------------------------------------------------------------
+/** Inn Unit Sale Price — automatic passive income (+20% when best-seller). */
+export function innPrice(p: Product, bestSeller: boolean, overrides: PriceOverrides = {}): number {
+  const base = overrides[p.name]?.inn ?? p.restaurant ?? p.merchant ?? 0;
   return bestSeller ? round(base * (1 + BEST_SELLER_BONUS)) : base;
+}
+/** Trade for Profit Price — manual sale to an NPC (no best-seller bonus). */
+export function tradePrice(p: Product, overrides: PriceOverrides = {}): number {
+  return overrides[p.name]?.trade ?? p.merchant ?? 0;
 }
 
 // ---- per-line economics --------------------------------------------------
 export interface CraftLineCalc {
   line: CraftLine;
   product?: Product;
-  outPerHr: number; // finished items / hr across all slots
-  price: number;
-  revenuePerHr: number;
+  level: number; // derived from the assigned retainer
+  outPerHr: number; // finished items / hr (one slot)
+  innPrice: number; // auto sale price
+  tradePrice: number; // manual sale price
+  revenuePerHr: number; // Inn auto income / hr
   inputCostPerHr: number;
-  profitPerHr: number;
+  profitPerHr: number; // Inn income - input cost
   estimated: boolean;
-  retainerOk: boolean; // assigned retainer actually has this job at >= level
+  active: boolean; // has a retainer who can make it
 }
 
-export function calcCraftLine(line: CraftLine, overrides: PriceOverrides = {}): CraftLineCalc {
+export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const product = PRODUCT_BY_NAME[line.productName];
-  const eff = efficiency(line.level);
-  const perSlot = product ? outputPerHr(product.job, line.level) : 0;
-  const outPerHr = perSlot * Math.max(0, line.slots);
-  const price = product ? salePrice(product, line.channel, line.bestSeller, overrides) : 0;
-  const revenuePerHr = outPerHr * price;
+  const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
+  const active = !!product && level > 0;
+  const outPerHr = active ? outputPerHr(product!.job, level) : 0;
+  const inn = product ? innPrice(product, line.bestSeller, plan.priceOverrides) : 0;
+  const trade = product ? tradePrice(product, plan.priceOverrides) : 0;
+  const revenuePerHr = outPerHr * inn;
   const inputCostPerHr = outPerHr * (product?.inputCost ?? 0);
   return {
     line,
     product,
+    level,
     outPerHr,
-    price,
+    innPrice: inn,
+    tradePrice: trade,
     revenuePerHr,
     inputCostPerHr,
     profitPerHr: revenuePerHr - inputCostPerHr,
-    estimated: eff.estimated,
-    retainerOk: retainerSkillOk(line.retainer, product?.job, line.level),
+    estimated: level > EFF_MULT_VERIFIED_MAX,
+    active,
   };
-}
-
-export function retainerSkillOk(name: string, job: Job | undefined, level: number): boolean {
-  if (!name || !job) return true; // no retainer chosen / no job → not a violation
-  const r = RETAINER_BY_NAME[name];
-  if (!r) return true;
-  const lv = r.skills[job];
-  return lv != null && lv >= level;
 }
 
 // ---- material flow (the "sync") -----------------------------------------
@@ -115,8 +119,8 @@ export interface MaterialFlow {
   name: string;
   category: string;
   source: string;
-  neededPerHr: number; // drawn by craft lines
-  producedPerHr: number; // farmed + gathered + crafted here
+  neededPerHr: number;
+  producedPerHr: number;
   netPerHr: number;
   inStock: number;
   runwayH: number; // hours until stockout (Infinity if net >= 0)
@@ -132,18 +136,18 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
 
   // craft lines consume ingredients (and produce their own product)
   for (const line of plan.craftLines) {
-    const c = calcCraftLine(line, plan.priceOverrides);
-    if (!c.product) continue;
+    const c = calcCraftLine(line, plan);
+    if (!c.product || !c.active) continue;
     touch(produced, c.product.name, c.outPerHr);
-    for (const ing of c.product.ingredients) {
-      touch(needed, ing.name, c.outPerHr * ing.amt);
-    }
+    for (const ing of c.product.ingredients) touch(needed, ing.name, c.outPerHr * ing.amt);
   }
-  // gather lines produce raw materials
+  // gather lines produce raw materials (rate from the assigned retainer's skill)
   for (const g of plan.gatherLines) {
     const mat = MATERIALS[g.materialName];
     if (!mat || !mat.job) continue;
-    touch(produced, g.materialName, outputPerHr(mat.job, g.level) * Math.max(0, g.slots));
+    const level = retainerJobLevel(g.retainer, mat.job, plan.retainerLevels);
+    if (level <= 0) continue;
+    touch(produced, g.materialName, outputPerHr(mat.job, level));
   }
   // farms produce crops
   for (const f of plan.farmLines) {
@@ -152,7 +156,8 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     touch(produced, f.cropName, (crop.yieldPerHrFarm ?? 0) * Math.max(0, f.farms));
   }
 
-  const names = new Set([...Object.keys(needed), ...Object.keys(produced)]);
+  // include any item the user tracks stock for, even if not flowing
+  const names = new Set([...Object.keys(needed), ...Object.keys(produced), ...Object.keys(plan.inventory)]);
   const flows: MaterialFlow[] = [];
   for (const name of names) {
     const n = needed[name] ?? 0;
@@ -163,7 +168,7 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     let status: MaterialFlow["status"];
     if (n === 0 && p === 0) status = "idle";
     else if (net > 1e-6) status = "surplus";
-    else if (net === 0 || Math.abs(net) < 1e-6) status = "ok";
+    else if (Math.abs(net) < 1e-6) status = "ok";
     else if (runwayH < plan.runwayTargetH) status = "stockout";
     else status = "draining";
     const cat = MATERIALS[name]?.category ?? PRODUCT_BY_NAME[name]?.type ?? "Unknown";
@@ -185,7 +190,7 @@ export interface PlanSummary {
   activeCraftSlots: number;
   activeGatherSlots: number;
   farms: number;
-  shortages: number; // materials draining below runway target
+  shortages: number;
 }
 
 export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSummary {
@@ -193,12 +198,15 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
   let cost = 0;
   let craftSlots = 0;
   for (const line of plan.craftLines) {
-    const c = calcCraftLine(line, plan.priceOverrides);
+    const c = calcCraftLine(line, plan);
+    if (!c.active) continue;
     rev += c.revenuePerHr;
     cost += c.inputCostPerHr;
-    craftSlots += Math.max(0, line.slots);
+    craftSlots += 1;
   }
-  const gatherSlots = plan.gatherLines.reduce((s, g) => s + Math.max(0, g.slots), 0);
+  const gatherSlots = plan.gatherLines.filter(
+    (g) => retainerJobLevel(g.retainer, MATERIALS[g.materialName]?.job as Job, plan.retainerLevels) > 0
+  ).length;
   const farms = plan.farmLines.reduce((s, f) => s + Math.max(0, f.farms), 0);
   const profit = rev - cost;
   const shortages = flows.filter((f) => f.status === "stockout").length;
@@ -218,16 +226,29 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
 }
 
 // ---- labor suggestions ---------------------------------------------------
-export interface RetainerSuggestion {
-  job: Job;
-  retainers: { name: string; level: number; confidant: boolean }[];
+export interface RetainerPick {
+  name: string;
+  level: number;
+  confidant: boolean;
 }
 
-/** Best available retainers for a given job, highest skill first. */
-export function bestRetainersFor(job: Job, recruitedOnly = true): { name: string; level: number; confidant: boolean }[] {
-  return RETAINERS.filter((r) => (recruitedOnly ? r.recruited : true) && r.skills[job] != null)
-    .map((r) => ({ name: r.name, level: r.skills[job] as number, confidant: r.confidant }))
+/** Best retainers for a job by effective skill (ignores recruited status). */
+export function bestRetainersFor(job: Job, levels?: RetainerLevels): RetainerPick[] {
+  return RETAINERS.filter((r) => retainerJobLevel(r.name, job, levels) > 0)
+    .map((r) => ({ name: r.name, level: retainerJobLevel(r.name, job, levels), confidant: r.confidant }))
     .sort((a, b) => b.level - a.level || (b.confidant ? 1 : 0) - (a.confidant ? 1 : 0));
+}
+
+/** Whether a retainer counts as recruited (user override wins over the sheet). */
+export function isRecruited(name: string, plan: PlanState): boolean {
+  const ov = plan.recruitedOverride?.[name];
+  if (ov != null) return ov;
+  return RETAINER_BY_NAME[name]?.recruited ?? false;
+}
+
+/** Recruited retainers who can do a job, highest effective skill first. */
+export function recruitedRetainersFor(job: Job, plan: PlanState): RetainerPick[] {
+  return bestRetainersFor(job, plan.retainerLevels).filter((r) => isRecruited(r.name, plan));
 }
 
 // ---- orders (touchstone) -------------------------------------------------
@@ -236,18 +257,16 @@ export interface OrderItemReq {
   needed: number;
   inStock: number;
   shortfall: number;
-  netPerHr: number; // net production toward this item under the current plan
-  hoursToFill: number; // shortfall / netPerHr (Infinity if not accumulating)
-  soloHours: number; // shortfall made solo by one L4 worker (rough estimate)
+  netPerHr: number;
+  hoursToFill: number;
   canMake: boolean;
   source: string;
 }
 
-/** Roll every un-done order up into per-item requirements vs stock & production. */
 export function computeOrderRequirements(plan: PlanState): OrderItemReq[] {
   const flows = computeMaterialFlows(plan);
-  const flowByName: Record<string, { net: number }> = {};
-  for (const f of flows) flowByName[f.name] = { net: f.netPerHr };
+  const netByName: Record<string, number> = {};
+  for (const f of flows) netByName[f.name] = f.netPerHr;
 
   const needed: Record<string, number> = {};
   for (const o of plan.orders) {
@@ -262,16 +281,10 @@ export function computeOrderRequirements(plan: PlanState): OrderItemReq[] {
   for (const item of Object.keys(needed)) {
     const inStock = plan.inventory[item] ?? 0;
     const shortfall = Math.max(0, needed[item] - inStock);
-    const net = flowByName[item]?.net ?? 0;
+    const net = netByName[item] ?? 0;
     const hoursToFill = shortfall <= 0 ? 0 : net > 1e-6 ? shortfall / net : Infinity;
     const product = PRODUCT_BY_NAME[item];
     const mat = MATERIALS[item];
-    const soloRate = product
-      ? outputPerHr(product.job, 4)
-      : mat?.job
-      ? outputPerHr(mat.job, 4)
-      : 0;
-    const soloHours = shortfall <= 0 ? 0 : soloRate > 0 ? shortfall / soloRate : Infinity;
     reqs.push({
       item,
       needed: needed[item],
@@ -279,7 +292,6 @@ export function computeOrderRequirements(plan: PlanState): OrderItemReq[] {
       shortfall,
       netPerHr: net,
       hoursToFill,
-      soloHours,
       canMake: !!product || !!mat?.job,
       source: product?.industry ?? mat?.source ?? "—",
     });
@@ -307,17 +319,12 @@ export interface ProductRanking {
   estimated: boolean;
 }
 
-/** Rank every priced product by profit/hr at the given level, channel and best-seller flag. */
-export function rankProducts(
-  level: number,
-  channel: SellChannel,
-  bestSeller: boolean,
-  overrides: PriceOverrides = {}
-): ProductRanking[] {
+/** Rank every priced product by Inn profit/hr at an assumed skill level. */
+export function rankProducts(level: number, bestSeller: boolean, overrides: PriceOverrides = {}): ProductRanking[] {
   const est = efficiency(level).estimated;
   return PRODUCTS.map((p) => {
     const outPerHr = outputPerHr(p.job, level);
-    const price = salePrice(p, channel, bestSeller, overrides);
+    const price = innPrice(p, bestSeller, overrides);
     const revenuePerHr = outPerHr * price;
     const inputCostPerHr = outPerHr * (p.inputCost ?? 0);
     return {
@@ -335,7 +342,7 @@ export function rankProducts(
     .sort((a, b) => b.profitPerHr - a.profitPerHr);
 }
 
-/** Products that have no recorded price in any source sheet (candidates for a manual override). */
+/** Products with no recorded price in any source sheet (candidates for a manual price). */
 export const PRODUCTS_MISSING_PRICE: Product[] = PRODUCTS.filter(
   (p) => p.merchant == null && p.restaurant == null
 );
@@ -356,9 +363,10 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
   const rev: Record<string, number> = {};
   const prof: Record<string, number> = {};
   for (const line of plan.craftLines) {
-    const c = calcCraftLine(line, plan.priceOverrides);
-    const ind = c.product?.industry ?? "Inn";
-    used[ind] = (used[ind] ?? 0) + Math.max(0, line.slots);
+    const c = calcCraftLine(line, plan);
+    if (!c.product) continue;
+    const ind = c.product.industry;
+    if (c.active) used[ind] = (used[ind] ?? 0) + 1;
     rev[ind] = (rev[ind] ?? 0) + c.revenuePerHr;
     prof[ind] = (prof[ind] ?? 0) + c.profitPerHr;
   }
@@ -373,10 +381,8 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
 
 // ---- optimizer -----------------------------------------------------------
 export interface OptimizeOptions {
-  level: number;
-  channel: SellChannel;
   bestSeller: boolean;
-  ordersFirst: boolean; // reserve one slot per craftable order item that is short
+  ordersFirst: boolean; // reserve a slot per short, craftable order item
 }
 export interface OptimizeResult {
   lines: CraftLine[];
@@ -385,27 +391,47 @@ export interface OptimizeResult {
   notes: string[];
 }
 
+/** Highest profit-per-unit priced product in an industry (output rate is equal within a job). */
+function bestProductForIndustry(ind: string, bestSeller: boolean, overrides: PriceOverrides): Product | undefined {
+  let best: Product | undefined;
+  let bestMargin = -Infinity;
+  for (const p of PRODUCTS) {
+    if (p.industry !== ind) continue;
+    const price = innPrice(p, bestSeller, overrides);
+    if (price <= 0) continue;
+    const margin = price - (p.inputCost ?? 0);
+    if (margin > bestMargin) {
+      bestMargin = margin;
+      best = p;
+    }
+  }
+  return best;
+}
+
 /**
- * Greedy per-industry allocation: optionally reserve one slot for each short,
- * craftable order item, then fill the remaining slots with the highest
- * profit/hr product in that industry. Maximises profit/hr under the slot caps.
+ * Assign each industry's slots to its best product, staffed by your highest-level
+ * available retainers (each retainer used once). Optionally reserve a slot for
+ * every short, craftable order item first.
  */
 export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeResult {
-  const ranked = rankProducts(opts.level, opts.channel, opts.bestSeller, plan.priceOverrides);
-  const bestByIndustry: Record<string, ProductRanking | undefined> = {};
-  for (const r of ranked) {
-    const ind = r.product.industry;
-    if (!bestByIndustry[ind]) bestByIndustry[ind] = r; // ranked is already sorted desc
-  }
+  const used = new Set<string>();
+  const claim = (job: Job): string => {
+    for (const r of recruitedRetainersFor(job, plan)) {
+      if (!used.has(r.name)) {
+        used.add(r.name);
+        return r.name;
+      }
+    }
+    return "";
+  };
 
-  // order items that are short and craftable, grouped by industry
-  const shortByIndustry: Record<string, Set<string>> = {};
+  const shortByIndustry: Record<string, string[]> = {};
   if (opts.ordersFirst) {
     for (const req of computeOrderRequirements(plan)) {
       if (req.shortfall <= 0) continue;
       const p = PRODUCT_BY_NAME[req.item];
       if (!p) continue;
-      (shortByIndustry[p.industry] ??= new Set()).add(p.name);
+      (shortByIndustry[p.industry] ??= []).push(p.name);
     }
   }
 
@@ -414,45 +440,82 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
   for (const ind of CRAFT_INDUSTRIES) {
     let cap = plan.industrySlots[ind] ?? 0;
     if (cap <= 0) continue;
-    // reserve slots for short order items
+
     for (const name of shortByIndustry[ind] ?? []) {
       if (cap <= 0) break;
-      lines.push({
-        id: uidLocal(),
-        productName: name,
-        retainer: bestRetainersFor(PRODUCT_BY_NAME[name].job)[0]?.name ?? "",
-        level: opts.level,
-        slots: 1,
-        channel: opts.channel,
-        bestSeller: opts.bestSeller,
-      });
+      const ret = claim(PRODUCT_BY_NAME[name].job);
+      if (!ret) {
+        notes.push(`Not enough ${ind} retainers to staff the order for ${name}.`);
+        continue;
+      }
+      lines.push({ id: uidLocal(), productName: name, retainer: ret, bestSeller: opts.bestSeller });
       cap -= 1;
     }
-    // fill the rest with the best earner
-    const best = bestByIndustry[ind];
-    if (best && cap > 0) {
-      lines.push({
-        id: uidLocal(),
-        productName: best.product.name,
-        retainer: bestRetainersFor(best.product.job)[0]?.name ?? "",
-        level: opts.level,
-        slots: cap,
-        channel: opts.channel,
-        bestSeller: opts.bestSeller,
-      });
-    } else if (!best) {
+
+    const best = bestProductForIndustry(ind, opts.bestSeller, plan.priceOverrides);
+    if (!best) {
       notes.push(`No priced product for ${ind} — left empty.`);
+      continue;
+    }
+    for (let i = 0; i < cap; i++) {
+      const ret = claim(best.job);
+      lines.push({ id: uidLocal(), productName: best.name, retainer: ret, bestSeller: opts.bestSeller });
+      if (!ret) notes.push(`${ind} slot left unstaffed — no more retainers with ${best.job}.`);
     }
   }
 
   let revenuePerHr = 0;
   let profitPerHr = 0;
+  const probe: PlanState = { ...plan, craftLines: lines };
   for (const line of lines) {
-    const c = calcCraftLine(line, plan.priceOverrides);
+    const c = calcCraftLine(line, probe);
     revenuePerHr += c.revenuePerHr;
     profitPerHr += c.profitPerHr;
   }
   return { lines, revenuePerHr, profitPerHr, notes };
+}
+
+// ---- trade tracker -------------------------------------------------------
+export interface ProducedItem {
+  name: string;
+  ratePerHr: number; // combined output across all active lines making it
+  hours: number; // time accumulated since last "sold" reset
+  units: number; // ratePerHr * hours
+  innValue: number; // units * inn price
+  tradeValue: number; // units * trade price
+  bestSeller: boolean;
+}
+
+/**
+ * How much of each finished product has piled up since it was last marked sold,
+ * plus the money it is worth via the Inn (auto) and Trade for Profit (manual).
+ */
+export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
+  const rate: Record<string, number> = {};
+  const bs: Record<string, boolean> = {};
+  for (const line of plan.craftLines) {
+    const c = calcCraftLine(line, plan);
+    if (!c.product || !c.active) continue;
+    rate[c.product.name] = (rate[c.product.name] ?? 0) + c.outPerHr;
+    if (line.bestSeller) bs[c.product.name] = true;
+  }
+  const out: ProducedItem[] = [];
+  for (const name of Object.keys(rate)) {
+    const p = PRODUCT_BY_NAME[name];
+    const anchor = plan.soldAt[name] ?? plan.trackingSince ?? now;
+    const hours = Math.max(0, (now - anchor) / 3_600_000);
+    const units = rate[name] * hours;
+    out.push({
+      name,
+      ratePerHr: rate[name],
+      hours,
+      units,
+      innValue: units * innPrice(p, !!bs[name], plan.priceOverrides),
+      tradeValue: units * tradePrice(p, plan.priceOverrides),
+      bestSeller: !!bs[name],
+    });
+  }
+  return out.sort((a, b) => b.tradeValue - a.tradeValue);
 }
 
 // ---- helpers -------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { PlanState, SellChannel } from "../types";
+import type { PlanState } from "../types";
 import { uid } from "../utils/storage";
-import { rankProducts, bestRetainersFor, fmt } from "../utils/calc";
+import { rankProducts, recruitedRetainersFor, fmt } from "../utils/calc";
 import type { Industry } from "../data/gameData";
 import { NumberInput, Select, Money, SectionTitle } from "./Ui";
 
@@ -15,13 +15,12 @@ export default function RecommendTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const [level, setLevel] = useState(4);
-  const [channel, setChannel] = useState<SellChannel>("restaurant");
   const [bestSeller, setBestSeller] = useState(false);
   const [industry, setIndustry] = useState<Industry | "All">("All");
 
   const ranked = useMemo(
-    () => rankProducts(level, channel, bestSeller, plan.priceOverrides),
-    [level, channel, bestSeller, plan.priceOverrides]
+    () => rankProducts(level, bestSeller, plan.priceOverrides),
+    [level, bestSeller, plan.priceOverrides]
   );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),
@@ -30,13 +29,10 @@ export default function RecommendTab({
 
   const addToPlan = (productName: string) => {
     const p = ranked.find((r) => r.product.name === productName)?.product;
-    const best = p ? bestRetainersFor(p.job)[0]?.name ?? "" : "";
+    const best = p ? recruitedRetainersFor(p.job, plan)[0]?.name ?? "" : "";
     setPlan((prev) => ({
       ...prev,
-      craftLines: [
-        ...prev.craftLines,
-        { id: uid(), productName, retainer: best, level, slots: 1, channel, bestSeller },
-      ],
+      craftLines: [...prev.craftLines, { id: uid(), productName, retainer: best, bestSeller }],
     }));
   };
 
@@ -48,20 +44,8 @@ export default function RecommendTab({
 
       <div className="card flex flex-wrap items-end gap-4 p-4">
         <label className="text-xs text-gray-400">
-          Skill level
+          Assumed level
           <NumberInput value={level} min={1} max={10} onChange={(n) => setLevel(Math.min(10, Math.max(1, n)))} className="mt-1 w-20" />
-        </label>
-        <label className="text-xs text-gray-400">
-          Sell at
-          <Select<SellChannel>
-            value={channel}
-            onChange={setChannel}
-            options={[
-              { value: "restaurant", label: "Restaurant" },
-              { value: "merchant", label: "Merchant" },
-            ]}
-            className="mt-1 w-36"
-          />
         </label>
         <label className="text-xs text-gray-400">
           Industry

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { PlanState, Order, OrderReq } from "../types";
 import { uid } from "../utils/storage";
 import { computeOrderRequirements, orderableItems, fmt } from "../utils/calc";
-import { NumberInput, Select, SectionTitle } from "./Ui";
+import { NumberInput, Combobox, SectionTitle } from "./Ui";
 
 const ITEM_OPTIONS = orderableItems().map((n) => ({ value: n, label: n }));
 const EMPTY_REQ = (): OrderReq => ({ item: ITEM_OPTIONS[0]?.value ?? "", qty: 1 });
@@ -92,10 +92,11 @@ export default function OrdersTab({
               <div className="space-y-2">
                 {o.reqs.map((r, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Select
+                    <Combobox
                       value={r.item}
                       onChange={(v) => updReq(o.id, i, { item: v })}
                       options={ITEM_OPTIONS}
+                      placeholder="Search item…"
                       className="flex-1"
                     />
                     <NumberInput
@@ -143,7 +144,6 @@ export default function OrdersTab({
                   <th className="th text-right">Short</th>
                   <th className="th text-right">Net/hr</th>
                   <th className="th text-right">Fill time</th>
-                  <th className="th text-right">Solo @L4</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,9 +178,6 @@ export default function OrdersTab({
                         `${fmt(r.hoursToFill, 1)}h`
                       )}
                     </td>
-                    <td className="td text-right tabular-nums text-gray-400">
-                      {r.shortfall <= 0 ? "—" : r.soloHours === Infinity ? "—" : `${fmt(r.soloHours, 1)}h`}
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -188,8 +185,7 @@ export default function OrdersTab({
           </div>
         )}
         <p className="mt-2 text-xs text-gray-500">
-          Fill time uses your current plan's net production. Solo @L4 estimates one level-4 worker
-          making the shortfall alone.
+          Fill time uses your current plan's net production. Set the stock you already have to shrink the shortfall.
         </p>
       </div>
     </div>

@@ -1,4 +1,98 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+/** Type-to-filter combobox. Shows a filtered dropdown; click or Enter to pick. */
+export function Combobox({
+  value,
+  onChange,
+  options,
+  placeholder = "Type to search…",
+  className = "",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hi, setHi] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 60);
+    return options.filter((o) => o.label.toLowerCase().includes(q)).slice(0, 60);
+  }, [query, options]);
+
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <input
+        className="input"
+        value={open ? query : current?.label ?? ""}
+        placeholder={placeholder}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+          setHi(0);
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          setHi(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHi((h) => Math.min(filtered.length - 1, h + 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHi((h) => Math.max(0, h - 1));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const pick = filtered[hi];
+            if (pick) {
+              onChange(pick.value);
+              setOpen(false);
+            }
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-line bg-panel2 py-1 shadow-xl">
+          {filtered.map((o, i) => (
+            <li
+              key={o.value}
+              className={`cursor-pointer px-3 py-1.5 text-sm ${
+                i === hi ? "bg-gold/20 text-white" : "text-gray-200 hover:bg-panel"
+              }`}
+              onMouseEnter={() => setHi(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {o.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function StatCard({
   label,
