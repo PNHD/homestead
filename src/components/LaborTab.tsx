@@ -108,6 +108,13 @@ export default function LaborTab({
 
   return (
     <div className="space-y-6">
+      {recruitedCount === 0 && (
+        <div className="card border-gold/40 bg-gold/5 p-4 text-sm text-gray-200">
+          👋 No retainers are marked recruited yet. Tick the ones you actually have below (or use{" "}
+          <span className="text-gold">Recruit all</span>) and set their skill levels — the whole app then
+          plans around <em>your</em> roster. Nothing is preloaded from anyone else's game.
+        </div>
+      )}
       <div>
         <SectionTitle hint="Best recruited retainer per job, by your levels. ★ = confidant.">
           Best retainer per job

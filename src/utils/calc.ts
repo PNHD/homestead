@@ -11,7 +11,7 @@ import {
   BASE_RATES,
   EFF_MULT_VERIFIED,
   EFF_MULT_VERIFIED_MAX,
-  EFF_MULT_ESTIMATED,
+  EFF_MULT_UNKNOWN,
   BEST_SELLER_BONUS,
   PRODUCTS,
   MATERIALS,
@@ -52,7 +52,8 @@ export function efficiency(level: number): Eff {
   if (lv <= EFF_MULT_VERIFIED_MAX) {
     return { mult: EFF_MULT_VERIFIED[lv] ?? 1.02, estimated: false };
   }
-  return { mult: EFF_MULT_ESTIMATED[lv] ?? EFF_MULT_ESTIMATED[10], estimated: true };
+  // Lv5+ multipliers are unknown in the sheet — fall back to the base rate (no bonus).
+  return { mult: EFF_MULT_UNKNOWN, estimated: true };
 }
 
 /** Items produced per hour by one retainer at a job & skill level. */
