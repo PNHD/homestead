@@ -2,7 +2,7 @@ import { PRODUCTS } from "../data/gameData";
 import type { PlanState, CraftLine } from "../types";
 import { uid } from "../utils/storage";
 import { calcCraftLine, recruitedRetainersFor, fmt, PRODUCT_BY_NAME } from "../utils/calc";
-import { Combobox, Select, Money, SectionTitle } from "./Ui";
+import { Combobox, Money, SectionTitle } from "./Ui";
 
 const PRODUCT_OPTIONS = [...PRODUCTS]
   .sort((a, b) => a.industry.localeCompare(b.industry) || a.name.localeCompare(b.name))
@@ -100,10 +100,11 @@ export default function ProductionTab({
                       )}
                     </td>
                     <td className="td min-w-[210px]">
-                      <Select
+                      <Combobox
                         value={line.retainer}
                         onChange={(v) => update(line.id, { retainer: v })}
                         options={retOptions}
+                        placeholder="Search retainer…"
                       />
                       {!c.active && (
                         <div className="mt-1 text-xs text-amber-400">

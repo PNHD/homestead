@@ -29,6 +29,8 @@ export default function LaborTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [recruitQ, setRecruitQ] = useState("");
+  const [rosterQ, setRosterQ] = useState("");
 
   const setLevel = (name: string, job: Job, level: number) =>
     setPlan((p) => {
@@ -56,13 +58,12 @@ export default function LaborTab({
     return d;
   }, [plan.craftLines, plan.gatherLines]);
 
-  const recruitNext = useMemo(
-    () =>
-      RETAINERS.filter((r) => !isRecruited(r.name, plan)).sort(
-        (a, b) => (b.recruitPriority ?? 0) - (a.recruitPriority ?? 0)
-      ),
-    [plan.recruitedOverride]
-  );
+  const recruitNext = useMemo(() => {
+    const q = recruitQ.trim().toLowerCase();
+    return RETAINERS.filter((r) => !isRecruited(r.name, plan))
+      .filter((r) => !q || r.name.toLowerCase().includes(q) || (r.innate ?? "").toLowerCase().includes(q))
+      .sort((a, b) => (b.recruitPriority ?? 0) - (a.recruitPriority ?? 0));
+  }, [plan.recruitedOverride, recruitQ]);
 
   const recruitAll = () =>
     setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, true])) }));
@@ -71,7 +72,9 @@ export default function LaborTab({
   const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {} }));
 
   const recruitedCount = RETAINERS.filter((r) => isRecruited(r.name, plan)).length;
-  const roster = RETAINERS.filter((r) => showAll || isRecruited(r.name, plan));
+  const roster = RETAINERS.filter((r) => showAll || isRecruited(r.name, plan)).filter(
+    (r) => !rosterQ.trim() || r.name.toLowerCase().includes(rosterQ.trim().toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -128,14 +131,22 @@ export default function LaborTab({
               {recruitedCount}/{RETAINERS.length} recruited · from the Retainer Guide, highest priority first.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <input
+              className="input w-48"
+              placeholder="Search name / skill…"
+              value={recruitQ}
+              onChange={(e) => setRecruitQ(e.target.value)}
+            />
             <button className="btn" onClick={recruitAll}>Recruit all</button>
             <button className="btn" onClick={clearAll}>Clear all</button>
             <button className="btn" onClick={resetRoster}>Reset to sheet</button>
           </div>
         </div>
         {recruitNext.length === 0 ? (
-          <div className="card p-6 text-center text-gray-500">Everyone is recruited. 🎉</div>
+          <div className="card p-6 text-center text-gray-500">
+            {recruitQ.trim() ? "No match." : "Everyone is recruited. 🎉"}
+          </div>
         ) : (
           <div className="card max-h-[28rem] overflow-auto">
             <table className="w-full min-w-[720px]">
@@ -178,17 +189,25 @@ export default function LaborTab({
       </div>
 
       <div>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-gray-100">Your roster</h2>
             <p className="text-xs text-gray-500">Tick recruited and edit skill levels to match your game.</p>
           </div>
-          <label className="flex items-center gap-2 text-xs text-gray-400">
-            <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-            Show all (incl. not recruited)
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              className="input w-48"
+              placeholder="Search retainer…"
+              value={rosterQ}
+              onChange={(e) => setRosterQ(e.target.value)}
+            />
+            <label className="flex items-center gap-2 text-xs text-gray-400">
+              <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+              Show all (incl. not recruited)
+            </label>
+          </div>
         </div>
-        <div className="card overflow-x-auto">
+        <div className="card max-h-[36rem] overflow-auto">
           <table className="w-full min-w-[960px]">
             <thead>
               <tr className="border-b border-line">

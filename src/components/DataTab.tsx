@@ -27,6 +27,7 @@ export default function DataTab({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [onlyMissing, setOnlyMissing] = useState(true);
+  const [priceQ, setPriceQ] = useState("");
 
   const isMissing = (p: (typeof ALL_PRODUCTS)[number]) => {
     const ov = plan.priceOverrides[p.name] ?? {};
@@ -35,10 +36,12 @@ export default function DataTab({
     return missInn || missTrade;
   };
   const missCount = useMemo(() => ALL_PRODUCTS.filter(isMissing).length, [plan.priceOverrides]);
-  const priceRows = useMemo(
-    () => (onlyMissing ? ALL_PRODUCTS.filter(isMissing) : ALL_PRODUCTS),
-    [onlyMissing, plan.priceOverrides]
-  );
+  const priceRows = useMemo(() => {
+    const q = priceQ.trim().toLowerCase();
+    return ALL_PRODUCTS.filter((p) => (onlyMissing ? isMissing(p) : true)).filter(
+      (p) => !q || p.name.toLowerCase().includes(q) || p.industry.toLowerCase().includes(q)
+    );
+  }, [onlyMissing, priceQ, plan.priceOverrides]);
 
   const onImport = async (file?: File | null) => {
     if (!file) return;
@@ -177,6 +180,12 @@ export default function DataTab({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <input
+              className="input w-48"
+              placeholder="Search product…"
+              value={priceQ}
+              onChange={(e) => setPriceQ(e.target.value)}
+            />
             <label className="flex items-center gap-2 text-xs text-gray-400">
               <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
               Only items missing a price

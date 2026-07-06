@@ -9,7 +9,7 @@ import {
   orderableItems,
   fmt,
 } from "../utils/calc";
-import { NumberInput, Select, Combobox, StatusChip, SectionTitle } from "./Ui";
+import { NumberInput, Combobox, StatusChip, SectionTitle } from "./Ui";
 
 const GATHER_OPTIONS = GATHERABLE_MATERIALS.map((m) => ({
   value: m.name,
@@ -93,10 +93,11 @@ export default function MaterialsTab({
                       placeholder="Search material…"
                       className="flex-1"
                     />
-                    <Select
+                    <Combobox
                       value={g.retainer}
                       onChange={(v) => updGather(g.id, { retainer: v })}
                       options={retOpts}
+                      placeholder="Search retainer…"
                       className="flex-1"
                     />
                     <button className="btn px-2 py-1" onClick={() => rmGather(g.id)}>
