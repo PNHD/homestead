@@ -86,10 +86,11 @@ export default function MaterialsTab({
                 ];
                 return (
                   <div key={g.id} className="flex items-center gap-2">
-                    <Select
+                    <Combobox
                       value={g.materialName}
                       onChange={(v) => updGather(g.id, { materialName: v })}
                       options={GATHER_OPTIONS}
+                      placeholder="Search material…"
                       className="flex-1"
                     />
                     <Select
@@ -122,10 +123,11 @@ export default function MaterialsTab({
             <div className="space-y-2">
               {plan.farmLines.map((f) => (
                 <div key={f.id} className="flex items-center gap-2">
-                  <Select
+                  <Combobox
                     value={f.cropName}
                     onChange={(v) => updFarm(f.id, { cropName: v })}
                     options={CROP_OPTIONS}
+                    placeholder="Search crop…"
                     className="flex-1"
                   />
                   <NumberInput value={f.farms} min={0} onChange={(n) => updFarm(f.id, { farms: n })} className="w-20" />

@@ -7,8 +7,7 @@ import {
   computeOrderRequirements,
   computeServe,
   computeSkillUsage,
-  rankProducts,
-  activeOverrides,
+  rankProductsForRoster,
   fmt,
   fmtMoney,
 } from "../utils/calc";
@@ -34,13 +33,13 @@ export default function DashboardTab({
   // what each industry *should* be making, if it isn't already the top earner
   const namesInPlan = new Set(plan.craftLines.map((l) => l.productName));
   const suggestions = useMemo(() => {
-    const ranked = rankProducts(4, false, activeOverrides(plan));
+    const ranked = rankProductsForRoster(plan, false);
     const perIndustry: Record<string, (typeof ranked)[number]> = {};
     for (const r of ranked) if (!perIndustry[r.product.industry]) perIndustry[r.product.industry] = r;
     return ["Inn", "Kiln", "Brewery"]
       .map((ind) => perIndustry[ind])
       .filter((r): r is (typeof ranked)[number] => !!r && !namesInPlan.has(r.product.name));
-  }, [plan.priceOverrides, plan.craftLines]);
+  }, [plan.priceOverrides, plan.craftLines, plan.retainerLevels, plan.recruitedOverride]);
 
   return (
     <div className="space-y-6">

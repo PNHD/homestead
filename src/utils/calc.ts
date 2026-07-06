@@ -450,6 +450,43 @@ export function rankProducts(level: number, bestSeller: boolean, overrides: Pric
     .sort((a, b) => b.profitPerHr - a.profitPerHr);
 }
 
+export interface RosterRanking extends ProductRanking {
+  level: number; // best recruited retainer level for this product's job (0 = none)
+  hasRetainer: boolean;
+}
+
+/**
+ * Rank priced products for the player's actual roster: profit-per-unit is the
+ * headline (fixed per item), profit/hr uses your best recruited retainer's level
+ * for that job (falls back to level 4 as a reference when you have nobody yet).
+ */
+export function rankProductsForRoster(plan: PlanState, bestSeller: boolean): RosterRanking[] {
+  const ov = activeOverrides(plan);
+  return PRODUCTS.map((p) => {
+    const best = recruitedRetainersFor(p.job, plan)[0];
+    const level = best?.level ?? 0;
+    const useLevel = level > 0 ? level : 4;
+    const outPerHr = outputPerHr(p.job, useLevel);
+    const price = innPrice(p, bestSeller, ov);
+    const revenuePerHr = outPerHr * price;
+    const inputCostPerHr = outPerHr * (p.inputCost ?? 0);
+    return {
+      product: p,
+      price,
+      outPerHr,
+      revenuePerHr,
+      inputCostPerHr,
+      profitPerHr: revenuePerHr - inputCostPerHr,
+      profitPerUnit: price - (p.inputCost ?? 0),
+      estimated: useLevel > EFF_MULT_VERIFIED_MAX,
+      level,
+      hasRetainer: level > 0,
+    };
+  })
+    .filter((r) => r.price > 0)
+    .sort((a, b) => b.profitPerUnit - a.profitPerUnit || b.profitPerHr - a.profitPerHr);
+}
+
 /** Products with no recorded price in any source sheet (candidates for a manual price). */
 export const PRODUCTS_MISSING_PRICE: Product[] = PRODUCTS.filter(
   (p) => p.merchant == null && p.restaurant == null

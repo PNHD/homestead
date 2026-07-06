@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import type { PlanState } from "../types";
 import { uid } from "../utils/storage";
-import { rankProducts, recruitedRetainersFor, activeOverrides, fmt } from "../utils/calc";
+import { rankProductsForRoster, recruitedRetainersFor, fmt } from "../utils/calc";
 import type { Industry } from "../data/gameData";
-import { NumberInput, Select, Money, SectionTitle } from "./Ui";
+import { Select, Money, SectionTitle } from "./Ui";
 
 const INDUSTRIES: (Industry | "All")[] = ["All", "Inn", "Kiln", "Brewery"];
 
@@ -14,13 +14,12 @@ export default function RecommendTab({
   plan: PlanState;
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
-  const [level, setLevel] = useState(4);
   const [bestSeller, setBestSeller] = useState(false);
   const [industry, setIndustry] = useState<Industry | "All">("All");
 
   const ranked = useMemo(
-    () => rankProducts(level, bestSeller, activeOverrides(plan)),
-    [level, bestSeller, plan.priceOverrides, plan.manualPricesEnabled]
+    () => rankProductsForRoster(plan, bestSeller),
+    [plan.priceOverrides, plan.manualPricesEnabled, plan.retainerLevels, plan.recruitedOverride, bestSeller]
   );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),
@@ -38,15 +37,11 @@ export default function RecommendTab({
 
   return (
     <div className="space-y-4">
-      <SectionTitle hint="Products ranked by profit/hr at the settings below. Add the winners straight to your plan.">
+      <SectionTitle hint="Ranked by profit per item (fixed). Profit/hr uses your best retainer's level for that job.">
         Best sellers &amp; recommendations
       </SectionTitle>
 
       <div className="card flex flex-wrap items-end gap-4 p-4">
-        <label className="text-xs text-gray-400">
-          Assumed level
-          <NumberInput value={level} min={1} max={10} onChange={(n) => setLevel(Math.min(10, Math.max(1, n)))} className="mt-1 w-20" />
-        </label>
         <label className="text-xs text-gray-400">
           Industry
           <Select
@@ -74,10 +69,9 @@ export default function RecommendTab({
               <th className="th w-10">#</th>
               <th className="th">Product</th>
               <th className="th">Industry</th>
-              <th className="th text-right">Price</th>
-              <th className="th text-right">Out/hr</th>
-              <th className="th text-right">Revenue/hr</th>
+              <th className="th text-right">Inn $</th>
               <th className="th text-right">Profit/unit</th>
+              <th className="th text-right">Your retainer</th>
               <th className="th text-right">Profit/hr</th>
               <th className="th"></th>
             </tr>
@@ -92,14 +86,17 @@ export default function RecommendTab({
                 </td>
                 <td className="td text-gray-400">{r.product.industry}</td>
                 <td className="td text-right tabular-nums">{r.price}</td>
+                <td className="td text-right font-semibold tabular-nums">{fmt(r.profitPerUnit, 1)}</td>
                 <td className="td text-right tabular-nums">
-                  {fmt(r.outPerHr, 2)}
-                  {r.estimated && <span className="ml-1 text-[10px] text-amber-400">est</span>}
+                  {r.hasRetainer ? (
+                    <span className="text-gray-300">
+                      L{r.level}
+                      {r.estimated && <span className="ml-1 text-[10px] text-amber-400">est</span>}
+                    </span>
+                  ) : (
+                    <span className="text-amber-400">none · @L4</span>
+                  )}
                 </td>
-                <td className="td text-right font-semibold">
-                  <Money n={r.revenuePerHr} className="text-gold" />
-                </td>
-                <td className="td text-right tabular-nums">{fmt(r.profitPerUnit, 1)}</td>
                 <td className="td text-right font-semibold">
                   <Money n={r.profitPerHr} className="text-jade" />
                 </td>
@@ -114,8 +111,10 @@ export default function RecommendTab({
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Ranking assumes every slot runs at level {level}. Input cost from recipes; 8 products without a
-        recorded price in any source sheet are omitted. Currently {plan.craftLines.length} line(s) in your plan.
+        <span className="text-gray-300">Profit/unit</span> = Inn price − input cost (fixed per item —
+        this is what makes a "best seller"). <span className="text-gray-300">Profit/hr</span> also depends on how
+        fast your assigned retainer works, so it uses your best recruited retainer's level for that job (or a
+        level-4 reference if you have none yet). Edit retainer levels on the Roster tab.
       </p>
     </div>
   );
