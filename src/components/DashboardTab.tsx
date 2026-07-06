@@ -5,6 +5,8 @@ import {
   computeSummary,
   computeIndustryBreakdown,
   computeOrderRequirements,
+  computeServe,
+  computeSkillUsage,
   rankProducts,
   activeOverrides,
   fmt,
@@ -24,6 +26,8 @@ export default function DashboardTab({
   const industries = useMemo(() => computeIndustryBreakdown(plan), [plan]);
   const orderReqs = useMemo(() => computeOrderRequirements(plan), [plan]);
 
+  const serve = useMemo(() => computeServe(plan), [plan]);
+  const skills = useMemo(() => computeSkillUsage(plan), [plan]);
   const stockouts = flows.filter((f) => f.status === "stockout");
   const orderShort = orderReqs.filter((r) => r.shortfall > 0);
 
@@ -101,6 +105,64 @@ export default function DashboardTab({
         </table>
       </div>
 
+      {/* restaurant serving + skill slots */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="card p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-100">Restaurant serving</h3>
+            {plan.serveModelEnabled === false ? (
+              <span className="chip bg-gray-500/15 text-gray-400">model off</span>
+            ) : serve.serveLimited ? (
+              <span className="chip bg-amber-500/15 text-amber-300">serve-limited</span>
+            ) : (
+              <span className="chip bg-jade/15 text-jade">keeping up</span>
+            )}
+          </div>
+          {plan.serveModelEnabled === false ? (
+            <p className="text-sm text-gray-500">
+              Serve model is off — every cooked/brewed item counts as Inn income directly. Turn it on in Data.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Mini label="Cooked/hr" value={fmt(serve.sellablePerHr, 1)} />
+                <Mini label="Serve cap/hr" value={fmt(serve.capacityPerHr, 1)} />
+                <Mini label="Served/hr" value={fmt(serve.servedPerHr, 1)} />
+              </div>
+              <div className="mt-2 text-sm text-gray-300">
+                Inn income: <Money n={serve.innIncomePerHr} className="text-gold" />/hr
+              </div>
+              {serve.serveLimited && (
+                <p className="mt-1 text-xs text-amber-400">
+                  Cooking outpaces your {fmt(serve.capacityPerHr, 1)}/hr catering — the surplus piles up to sell via Trade.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        <button className="card p-4 text-left transition-colors hover:border-gold/50" onClick={() => goto("labor")}>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-100">Retainer skill slots</h3>
+            {skills.some((s) => s.over) ? (
+              <span className="chip bg-red-500/20 text-red-300">over capacity</span>
+            ) : (
+              <span className="chip bg-jade/15 text-jade">within limits</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+            {skills.map((s) => (
+              <div key={s.job} className="flex items-center justify-between">
+                <span className="text-gray-400">{s.job.slice(0, 4)}</span>
+                <span className={`tabular-nums ${s.over ? "text-red-400" : "text-gray-200"}`}>
+                  {s.used}/{s.capacity}
+                </span>
+              </div>
+            ))}
+          </div>
+        </button>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         {/* order shortfalls */}
         <AlertCard
@@ -155,6 +217,15 @@ export default function DashboardTab({
         Suggestions compare each industry's current lines against its highest profit/hr product at
         level 4. Slot caps are editable in the Data tab.
       </p>
+    </div>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-lg bg-ink/60 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="text-lg font-bold tabular-nums text-gray-100">{value}</div>
     </div>
   );
 }

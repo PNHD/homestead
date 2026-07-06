@@ -169,7 +169,8 @@ export default function ProductionTab({
       <p className="text-xs text-gray-500">
         <span className="text-gray-300">Inn $</span> = automatic passive sale price ·{" "}
         <span className="text-gray-300">Trade $</span> = manual sell-to-NPC price (tracked on the Sell tab).
-        Inn income/hr = output × Inn price; Profit = Inn income − input cost. Use ⧉ to duplicate a slot.
+        Inn income/hr = output × Inn price (potential). Actual Inn income is capped by Restaurant serving
+        capacity — see the Dashboard. Use ⧉ to duplicate a slot.
       </p>
     </div>
   );

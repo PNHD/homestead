@@ -87,7 +87,15 @@ export default function LaborTab({
               <div key={job} className="card p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-100">{job}</h3>
-                  {dem > 0 && <span className="chip bg-gold/15 text-gold">{dem} slot{dem > 1 ? "s" : ""}</span>}
+                  {(() => {
+                    const cap = plan.skillSlots[job] ?? 0;
+                    const over = dem > cap;
+                    return (
+                      <span className={`chip ${over ? "bg-red-500/20 text-red-300" : "bg-gold/15 text-gold"}`}>
+                        {dem}/{cap} slots
+                      </span>
+                    );
+                  })()}
                 </div>
                 {list.length === 0 ? (
                   <p className="mt-2 text-sm text-gray-500">No recruited retainer has this skill.</p>

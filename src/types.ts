@@ -71,6 +71,10 @@ export interface PlanState {
   retainerLevels: Record<string, Partial<Record<Job, number>>>;
   /** user's recruited/not overrides keyed by retainer name */
   recruitedOverride: Record<string, boolean>;
+  /** how many retainers you can staff per skill (Retainer Plan) */
+  skillSlots: Partial<Record<Job, number>>;
+  /** model the Restaurant serving stage (Inn income capped by catering capacity) */
+  serveModelEnabled: boolean;
   /** epoch ms since which production has been accumulating (Trade tracker) */
   trackingSince: number;
   /** per-product epoch ms of the last "sold" reset (Trade tracker) */
@@ -87,6 +91,18 @@ export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = {
   "Local Specialties": 12,
 };
 
+// Retainer skill slots at homestead Lv 6 (from the planner's Retainer Plan).
+export const DEFAULT_SKILL_SLOTS: Partial<Record<Job, number>> = {
+  Cook: 2,
+  Catering: 6,
+  Kilnwork: 2,
+  Brewing: 3,
+  Fishing: 2,
+  Mining: 3,
+  Forestry: 1,
+  Hunting: 0,
+};
+
 export const emptyPlan = (): PlanState => ({
   homesteadLevel: 6,
   craftLines: [],
@@ -100,6 +116,8 @@ export const emptyPlan = (): PlanState => ({
   manualPricesEnabled: true,
   retainerLevels: {},
   recruitedOverride: {},
+  skillSlots: { ...DEFAULT_SKILL_SLOTS },
+  serveModelEnabled: true,
   trackingSince: Date.now(),
   soldAt: {},
 });

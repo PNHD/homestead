@@ -2,8 +2,10 @@ import { useMemo, useRef, useState } from "react";
 import type { PlanState, PriceOverride } from "../types";
 import { emptyPlan } from "../types";
 import { exportPlan, importPlan } from "../utils/storage";
-import { PRODUCTS, MATERIALS, RETAINERS, CROPS } from "../data/gameData";
+import { PRODUCTS, MATERIALS, RETAINERS, CROPS, type Job } from "../data/gameData";
 import { NumberInput, SectionTitle } from "./Ui";
+
+const SKILL_JOBS: Job[] = ["Cook", "Catering", "Kilnwork", "Brewing", "Fishing", "Hunting", "Mining", "Forestry"];
 
 const INDUSTRY_SLOTS: { key: string; label: string }[] = [
   { key: "Inn", label: "Kitchen (cook)" },
@@ -50,6 +52,8 @@ export default function DataTab({
 
   const setSlots = (ind: string, n: number) =>
     setPlan((p) => ({ ...p, industrySlots: { ...p.industrySlots, [ind]: n } }));
+  const setSkillSlot = (job: Job, n: number) =>
+    setPlan((p) => ({ ...p, skillSlots: { ...p.skillSlots, [job]: n } }));
   const setOverride = (name: string, patch: PriceOverride) =>
     setPlan((p) => {
       const cur = p.priceOverrides[name] ?? {};
@@ -129,9 +133,38 @@ export default function DataTab({
           ))}
         </div>
         <p className="mt-1 text-xs text-gray-500">
-          Kitchen cooks dishes → Restaurant serves them for Inn income (6 serve slots &gt; 3 cook slots, so
-          cooking is the bottleneck). Local Specialties = fishing/hunting/mining/forestry gather slots.
+          Kitchen cooks dishes → Restaurant serves them for Inn income. Local Specialties =
+          fishing/hunting/mining/forestry gather slots.
         </p>
+        <label className="mt-2 flex items-center gap-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[#5bbf9a]"
+            checked={plan.serveModelEnabled !== false}
+            onChange={(e) => setPlan((p) => ({ ...p, serveModelEnabled: e.target.checked }))}
+          />
+          Model Restaurant serving (cap Inn income by catering throughput)
+        </label>
+      </div>
+
+      <div>
+        <SectionTitle hint="How many retainers you can staff per skill (Retainer Plan). Used for over-capacity warnings.">
+          Retainer skill slots
+        </SectionTitle>
+        <div className="card flex flex-wrap items-center gap-x-5 gap-y-3 p-4">
+          {SKILL_JOBS.map((job) => (
+            <label key={job} className="flex items-center gap-2 text-sm text-gray-300">
+              {job}
+              <NumberInput
+                value={plan.skillSlots[job] ?? 0}
+                min={0}
+                max={12}
+                onChange={(n) => setSkillSlot(job, n)}
+                className="w-16"
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       <div>
