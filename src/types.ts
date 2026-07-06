@@ -71,6 +71,8 @@ export interface PlanState {
   retainerLevels: Record<string, Partial<Record<Job, number>>>;
   /** user's recruited/not overrides keyed by retainer name */
   recruitedOverride: Record<string, boolean>;
+  /** retainers the user adds that are not in the source sheets (skills live in retainerLevels) */
+  customRetainers: { name: string; confidant?: boolean }[];
   /** how many retainers you can staff per skill (Retainer Plan) */
   skillSlots: Partial<Record<Job, number>>;
   /** model the Restaurant serving stage (Inn income capped by catering capacity) */
@@ -116,6 +118,7 @@ export const emptyPlan = (): PlanState => ({
   manualPricesEnabled: true,
   retainerLevels: {},
   recruitedOverride: {},
+  customRetainers: [],
   skillSlots: { ...DEFAULT_SKILL_SLOTS },
   serveModelEnabled: true,
   trackingSince: Date.now(),

@@ -340,6 +340,32 @@ export interface RetainerPick {
   confidant: boolean;
 }
 
+export interface RosterEntry {
+  name: string;
+  confidant: boolean;
+  custom: boolean;
+}
+
+/** Full roster: sheet retainers plus any the user added (custom win by name). */
+export function rosterEntries(plan: PlanState): RosterEntry[] {
+  const customNames = new Set(plan.customRetainers.map((c) => c.name));
+  const customs: RosterEntry[] = plan.customRetainers.map((c) => ({
+    name: c.name,
+    confidant: !!c.confidant,
+    custom: true,
+  }));
+  const sheet: RosterEntry[] = RETAINERS.filter((r) => !customNames.has(r.name)).map((r) => ({
+    name: r.name,
+    confidant: r.confidant,
+    custom: false,
+  }));
+  return [...customs, ...sheet];
+}
+
+export function isCustomRetainer(name: string, plan: PlanState): boolean {
+  return plan.customRetainers.some((c) => c.name === name);
+}
+
 /** Best retainers for a job by effective skill (ignores recruited status). */
 export function bestRetainersFor(job: Job, levels?: RetainerLevels): RetainerPick[] {
   return RETAINERS.filter((r) => retainerJobLevel(r.name, job, levels) > 0)
@@ -347,16 +373,20 @@ export function bestRetainersFor(job: Job, levels?: RetainerLevels): RetainerPic
     .sort((a, b) => b.level - a.level || (b.confidant ? 1 : 0) - (a.confidant ? 1 : 0));
 }
 
-/** Whether a retainer counts as recruited (user override wins over the sheet). */
+/** Whether a retainer counts as recruited (user override wins; custom = recruited). */
 export function isRecruited(name: string, plan: PlanState): boolean {
   const ov = plan.recruitedOverride?.[name];
   if (ov != null) return ov;
+  if (isCustomRetainer(name, plan)) return true;
   return RETAINER_BY_NAME[name]?.recruited ?? false;
 }
 
-/** Recruited retainers who can do a job, highest effective skill first. */
+/** Recruited retainers (sheet + custom) who can do a job, highest skill first. */
 export function recruitedRetainersFor(job: Job, plan: PlanState): RetainerPick[] {
-  return bestRetainersFor(job, plan.retainerLevels).filter((r) => isRecruited(r.name, plan));
+  return rosterEntries(plan)
+    .filter((r) => isRecruited(r.name, plan) && retainerJobLevel(r.name, job, plan.retainerLevels) > 0)
+    .map((r) => ({ name: r.name, level: retainerJobLevel(r.name, job, plan.retainerLevels), confidant: r.confidant }))
+    .sort((a, b) => b.level - a.level || (b.confidant ? 1 : 0) - (a.confidant ? 1 : 0));
 }
 
 // ---- orders (touchstone) -------------------------------------------------

@@ -6,6 +6,7 @@ import {
   outputPerHr,
   retainerJobLevel,
   isRecruited,
+  rosterEntries,
   PRODUCT_BY_NAME,
 } from "../utils/calc";
 import { NumberInput, SectionTitle } from "./Ui";
@@ -31,6 +32,34 @@ export default function LaborTab({
   const [showAll, setShowAll] = useState(false);
   const [recruitQ, setRecruitQ] = useState("");
   const [rosterQ, setRosterQ] = useState("");
+  const [newName, setNewName] = useState("");
+
+  const addCustom = () => {
+    const name = newName.trim();
+    if (!name) return;
+    setPlan((p) => {
+      if (p.customRetainers.some((c) => c.name === name) || RETAINERS.some((r) => r.name === name)) return p;
+      return {
+        ...p,
+        customRetainers: [...p.customRetainers, { name }],
+        recruitedOverride: { ...p.recruitedOverride, [name]: true },
+      };
+    });
+    setNewName("");
+  };
+  const removeCustom = (name: string) =>
+    setPlan((p) => {
+      const levels = { ...p.retainerLevels };
+      delete levels[name];
+      const rec = { ...p.recruitedOverride };
+      delete rec[name];
+      return {
+        ...p,
+        customRetainers: p.customRetainers.filter((c) => c.name !== name),
+        retainerLevels: levels,
+        recruitedOverride: rec,
+      };
+    });
 
   const setLevel = (name: string, job: Job, level: number) =>
     setPlan((p) => {
@@ -71,10 +100,11 @@ export default function LaborTab({
     setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, false])) }));
   const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {} }));
 
-  const recruitedCount = RETAINERS.filter((r) => isRecruited(r.name, plan)).length;
-  const roster = RETAINERS.filter((r) => showAll || isRecruited(r.name, plan)).filter(
-    (r) => !rosterQ.trim() || r.name.toLowerCase().includes(rosterQ.trim().toLowerCase())
-  );
+  const allEntries = rosterEntries(plan);
+  const recruitedCount = allEntries.filter((r) => isRecruited(r.name, plan)).length;
+  const roster = allEntries
+    .filter((r) => showAll || isRecruited(r.name, plan))
+    .filter((r) => !rosterQ.trim() || r.name.toLowerCase().includes(rosterQ.trim().toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -128,7 +158,7 @@ export default function LaborTab({
           <div>
             <h2 className="text-lg font-semibold text-gray-100">Recruit priority</h2>
             <p className="text-xs text-gray-500">
-              {recruitedCount}/{RETAINERS.length} recruited · from the Retainer Guide, highest priority first.
+              {recruitedCount}/{allEntries.length} recruited · from the Retainer Guide, highest priority first.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -192,18 +222,32 @@ export default function LaborTab({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-gray-100">Your roster</h2>
-            <p className="text-xs text-gray-500">Tick recruited and edit skill levels to match your game.</p>
+            <p className="text-xs text-gray-500">
+              Tick recruited and edit skill levels to match your game. Missing an NPC (e.g. Zhang Hu)? Add them below.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-1">
+              <input
+                className="input w-40"
+                placeholder="Add retainer name…"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCustom()}
+              />
+              <button className="btn btn-gold" onClick={addCustom}>
+                + Add
+              </button>
+            </div>
             <input
-              className="input w-48"
+              className="input w-44"
               placeholder="Search retainer…"
               value={rosterQ}
               onChange={(e) => setRosterQ(e.target.value)}
             />
             <label className="flex items-center gap-2 text-xs text-gray-400">
               <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              Show all (incl. not recruited)
+              Show all
             </label>
           </div>
         </div>
@@ -226,6 +270,18 @@ export default function LaborTab({
                   <td className="td font-medium">
                     {r.name}
                     {r.confidant && <span className="text-gold" title="Confidant"> ★</span>}
+                    {r.custom && (
+                      <>
+                        <span className="ml-2 chip bg-sky-500/15 text-sky-300">custom</span>
+                        <button
+                          className="ml-2 text-gray-500 hover:text-red-400"
+                          title="Remove custom retainer"
+                          onClick={() => removeCustom(r.name)}
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
                   </td>
                   <td className="td text-center">
                     <input
