@@ -37,6 +37,11 @@ export const GATHERABLE_MATERIALS = Object.values(MATERIALS).filter(
 export type PriceOverrides = Record<string, { inn?: number; trade?: number }>;
 export type RetainerLevels = Record<string, Partial<Record<Job, number>>>;
 
+/** Price overrides that are actually in effect (empty when the user turns them off). */
+export function activeOverrides(plan: PlanState): PriceOverrides {
+  return plan.manualPricesEnabled === false ? {} : plan.priceOverrides;
+}
+
 // ---- efficiency ----------------------------------------------------------
 export interface Eff {
   mult: number;
@@ -95,8 +100,8 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
   const active = !!product && level > 0;
   const outPerHr = active ? outputPerHr(product!.job, level) : 0;
-  const inn = product ? innPrice(product, line.bestSeller, plan.priceOverrides) : 0;
-  const trade = product ? tradePrice(product, plan.priceOverrides) : 0;
+  const inn = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
+  const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
   const inputCostPerHr = outPerHr * (product?.inputCost ?? 0);
   return {
@@ -452,7 +457,7 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
       cap -= 1;
     }
 
-    const best = bestProductForIndustry(ind, opts.bestSeller, plan.priceOverrides);
+    const best = bestProductForIndustry(ind, opts.bestSeller, activeOverrides(plan));
     if (!best) {
       notes.push(`No priced product for ${ind} — left empty.`);
       continue;
@@ -510,8 +515,8 @@ export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
       ratePerHr: rate[name],
       hours,
       units,
-      innValue: units * innPrice(p, !!bs[name], plan.priceOverrides),
-      tradeValue: units * tradePrice(p, plan.priceOverrides),
+      innValue: units * innPrice(p, !!bs[name], activeOverrides(plan)),
+      tradeValue: units * tradePrice(p, activeOverrides(plan)),
       bestSeller: !!bs[name],
     });
   }

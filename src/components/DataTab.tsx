@@ -1,12 +1,14 @@
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { PlanState, PriceOverride } from "../types";
 import { emptyPlan } from "../types";
 import { exportPlan, importPlan } from "../utils/storage";
 import { PRODUCTS, MATERIALS, RETAINERS, CROPS } from "../data/gameData";
-import { PRODUCTS_MISSING_PRICE } from "../utils/calc";
 import { NumberInput, SectionTitle } from "./Ui";
 
 const CRAFT_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
+const ALL_PRODUCTS = [...PRODUCTS].sort(
+  (a, b) => a.industry.localeCompare(b.industry) || a.name.localeCompare(b.name)
+);
 
 export default function DataTab({
   plan,
@@ -16,6 +18,19 @@ export default function DataTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [onlyMissing, setOnlyMissing] = useState(true);
+
+  const isMissing = (p: (typeof ALL_PRODUCTS)[number]) => {
+    const ov = plan.priceOverrides[p.name] ?? {};
+    const missInn = p.restaurant == null && ov.inn == null;
+    const missTrade = p.merchant == null && ov.trade == null;
+    return missInn || missTrade;
+  };
+  const missCount = useMemo(() => ALL_PRODUCTS.filter(isMissing).length, [plan.priceOverrides]);
+  const priceRows = useMemo(
+    () => (onlyMissing ? ALL_PRODUCTS.filter(isMissing) : ALL_PRODUCTS),
+    [onlyMissing, plan.priceOverrides]
+  );
 
   const onImport = async (file?: File | null) => {
     if (!file) return;
@@ -110,12 +125,33 @@ export default function DataTab({
       </div>
 
       <div>
-        <SectionTitle hint="These products have no price in any source sheet — enter the in-game Inn & Trade price to include them everywhere.">
-          Manual prices ({PRODUCTS_MISSING_PRICE.length} items missing data)
-        </SectionTitle>
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[520px]">
-            <thead>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-100">Manual prices</h2>
+            <p className="text-xs text-gray-500">
+              {missCount} product(s) still missing a price. Fill the in-game Inn / Trade value; blank cells
+              fall back to the sheet.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-gray-400">
+              <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
+              Only items missing a price
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-400">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[#5bbf9a]"
+                checked={plan.manualPricesEnabled !== false}
+                onChange={(e) => setPlan((p) => ({ ...p, manualPricesEnabled: e.target.checked }))}
+              />
+              Manual prices ON
+            </label>
+          </div>
+        </div>
+        <div className="card max-h-[32rem] overflow-auto">
+          <table className="w-full min-w-[560px]">
+            <thead className="sticky top-0 bg-panel">
               <tr className="border-b border-line">
                 <th className="th">Product</th>
                 <th className="th">Industry</th>
@@ -124,23 +160,28 @@ export default function DataTab({
               </tr>
             </thead>
             <tbody>
-              {PRODUCTS_MISSING_PRICE.map((p) => {
+              {priceRows.map((p) => {
                 const ov = plan.priceOverrides[p.name] ?? {};
+                const missInn = p.restaurant == null && ov.inn == null;
+                const missTrade = p.merchant == null && ov.trade == null;
                 return (
                   <tr key={p.name} className="border-b border-line/50 last:border-0">
-                    <td className="td font-medium">{p.name}</td>
+                    <td className="td font-medium">
+                      {p.name}
+                      {(missInn || missTrade) && <span className="ml-2 text-xs text-amber-400">missing</span>}
+                    </td>
                     <td className="td text-gray-400">{p.industry}</td>
-                    <td className="td text-right">
+                    <td className={`td text-right ${missInn ? "bg-amber-500/5" : ""}`}>
                       <NumberInput
-                        value={ov.inn ?? 0}
+                        value={ov.inn ?? p.restaurant ?? 0}
                         min={0}
                         onChange={(n) => setOverride(p.name, { inn: n || undefined })}
                         className="w-24 text-right"
                       />
                     </td>
-                    <td className="td text-right">
+                    <td className={`td text-right ${missTrade ? "bg-amber-500/5" : ""}`}>
                       <NumberInput
-                        value={ov.trade ?? 0}
+                        value={ov.trade ?? p.merchant ?? 0}
                         min={0}
                         onChange={(n) => setOverride(p.name, { trade: n || undefined })}
                         className="w-24 text-right"

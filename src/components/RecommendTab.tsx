@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PlanState } from "../types";
 import { uid } from "../utils/storage";
-import { rankProducts, recruitedRetainersFor, fmt } from "../utils/calc";
+import { rankProducts, recruitedRetainersFor, activeOverrides, fmt } from "../utils/calc";
 import type { Industry } from "../data/gameData";
 import { NumberInput, Select, Money, SectionTitle } from "./Ui";
 
@@ -19,8 +19,8 @@ export default function RecommendTab({
   const [industry, setIndustry] = useState<Industry | "All">("All");
 
   const ranked = useMemo(
-    () => rankProducts(level, bestSeller, plan.priceOverrides),
-    [level, bestSeller, plan.priceOverrides]
+    () => rankProducts(level, bestSeller, activeOverrides(plan)),
+    [level, bestSeller, plan.priceOverrides, plan.manualPricesEnabled]
   );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),

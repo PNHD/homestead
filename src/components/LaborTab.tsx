@@ -58,12 +58,19 @@ export default function LaborTab({
 
   const recruitNext = useMemo(
     () =>
-      RETAINERS.filter((r) => !isRecruited(r.name, plan))
-        .sort((a, b) => (b.recruitPriority ?? 0) - (a.recruitPriority ?? 0))
-        .slice(0, 12),
+      RETAINERS.filter((r) => !isRecruited(r.name, plan)).sort(
+        (a, b) => (b.recruitPriority ?? 0) - (a.recruitPriority ?? 0)
+      ),
     [plan.recruitedOverride]
   );
 
+  const recruitAll = () =>
+    setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, true])) }));
+  const clearAll = () =>
+    setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, false])) }));
+  const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {} }));
+
+  const recruitedCount = RETAINERS.filter((r) => isRecruited(r.name, plan)).length;
   const roster = RETAINERS.filter((r) => showAll || isRecruited(r.name, plan));
 
   return (
@@ -106,13 +113,23 @@ export default function LaborTab({
       </div>
 
       <div>
-        <SectionTitle hint="From the Retainer Guide. Recruit these next; tick them once you have them.">
-          Recruit priority
-        </SectionTitle>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-100">Recruit priority</h2>
+            <p className="text-xs text-gray-500">
+              {recruitedCount}/{RETAINERS.length} recruited · from the Retainer Guide, highest priority first.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn" onClick={recruitAll}>Recruit all</button>
+            <button className="btn" onClick={clearAll}>Clear all</button>
+            <button className="btn" onClick={resetRoster}>Reset to sheet</button>
+          </div>
+        </div>
         {recruitNext.length === 0 ? (
           <div className="card p-6 text-center text-gray-500">Everyone is recruited. 🎉</div>
         ) : (
-          <div className="card overflow-x-auto">
+          <div className="card max-h-[28rem] overflow-auto">
             <table className="w-full min-w-[720px]">
               <thead>
                 <tr className="border-b border-line">

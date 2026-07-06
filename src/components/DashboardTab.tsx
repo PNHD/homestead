@@ -6,6 +6,7 @@ import {
   computeIndustryBreakdown,
   computeOrderRequirements,
   rankProducts,
+  activeOverrides,
   fmt,
   fmtMoney,
 } from "../utils/calc";
@@ -29,7 +30,7 @@ export default function DashboardTab({
   // what each industry *should* be making, if it isn't already the top earner
   const namesInPlan = new Set(plan.craftLines.map((l) => l.productName));
   const suggestions = useMemo(() => {
-    const ranked = rankProducts(4, false, plan.priceOverrides);
+    const ranked = rankProducts(4, false, activeOverrides(plan));
     const perIndustry: Record<string, (typeof ranked)[number]> = {};
     for (const r of ranked) if (!perIndustry[r.product.industry]) perIndustry[r.product.industry] = r;
     return ["Inn", "Kiln", "Brewery"]

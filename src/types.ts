@@ -65,6 +65,8 @@ export interface PlanState {
   industrySlots: Record<string, number>;
   /** manual price overrides keyed by product name */
   priceOverrides: Record<string, PriceOverride>;
+  /** when false, manual price overrides are ignored (use sheet data only) */
+  manualPricesEnabled: boolean;
   /** user's real retainer skill levels, overriding the spreadsheet snapshot */
   retainerLevels: Record<string, Partial<Record<Job, number>>>;
   /** user's recruited/not overrides keyed by retainer name */
@@ -91,6 +93,7 @@ export const emptyPlan = (): PlanState => ({
   runwayTargetH: 24,
   industrySlots: { ...DEFAULT_INDUSTRY_SLOTS },
   priceOverrides: {},
+  manualPricesEnabled: true,
   retainerLevels: {},
   recruitedOverride: {},
   trackingSince: Date.now(),
