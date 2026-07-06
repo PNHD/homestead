@@ -5,7 +5,13 @@ import { exportPlan, importPlan } from "../utils/storage";
 import { PRODUCTS, MATERIALS, RETAINERS, CROPS } from "../data/gameData";
 import { NumberInput, SectionTitle } from "./Ui";
 
-const CRAFT_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
+const INDUSTRY_SLOTS: { key: string; label: string }[] = [
+  { key: "Inn", label: "Kitchen (cook)" },
+  { key: "Restaurant", label: "Restaurant (serve)" },
+  { key: "Kiln", label: "Porcelain Kiln" },
+  { key: "Brewery", label: "Aromas Brewery" },
+  { key: "Local Specialties", label: "Local Specialties (gather)" },
+];
 const ALL_PRODUCTS = [...PRODUCTS].sort(
   (a, b) => a.industry.localeCompare(b.industry) || a.name.localeCompare(b.name)
 );
@@ -105,23 +111,27 @@ export default function DataTab({
       </div>
 
       <div>
-        <SectionTitle hint="Crafting slot capacity per industry — drives the Optimizer & Dashboard.">
+        <SectionTitle hint="Slots unlock as your homestead levels up (defaults shown for Lv 6). Kitchen/Kiln/Brewery drive the Optimizer.">
           Industry slots
         </SectionTitle>
-        <div className="card flex flex-wrap items-center gap-4 p-4">
-          {CRAFT_INDUSTRIES.map((ind) => (
-            <label key={ind} className="flex items-center gap-2 text-sm text-gray-300">
-              {ind}
+        <div className="card flex flex-wrap items-center gap-x-5 gap-y-3 p-4">
+          {INDUSTRY_SLOTS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 text-sm text-gray-300">
+              {label}
               <NumberInput
-                value={plan.industrySlots[ind] ?? 0}
+                value={plan.industrySlots[key] ?? 0}
                 min={0}
-                max={12}
-                onChange={(n) => setSlots(ind, n)}
+                max={24}
+                onChange={(n) => setSlots(key, n)}
                 className="w-20"
               />
             </label>
           ))}
         </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Kitchen cooks dishes → Restaurant serves them for Inn income (6 serve slots &gt; 3 cook slots, so
+          cooking is the bottleneck). Local Specialties = fishing/hunting/mining/forestry gather slots.
+        </p>
       </div>
 
       <div>

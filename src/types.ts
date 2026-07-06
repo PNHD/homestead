@@ -77,10 +77,14 @@ export interface PlanState {
   soldAt: Record<string, number>;
 }
 
+// Slot capacities at homestead Lv 6 (from the planner's Dashboard/Retainer Plan).
+// Kitchen cooks, Restaurant serves, Kiln/Brewery craft, Local Specialties gather.
 export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = {
   Inn: 3,
+  Restaurant: 6,
   Kiln: 3,
   Brewery: 3,
+  "Local Specialties": 12,
 };
 
 export const emptyPlan = (): PlanState => ({
