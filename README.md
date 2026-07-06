@@ -12,9 +12,13 @@ is best for each job.
 - **Production & Revenue** — add craft lines (dishes, wines, kiln items), choose retainer level,
   slots, sell channel (Merchant/Restaurant) and best-seller. Auto-computes output/hr, price,
   revenue/hr and profit/hr, with plan-wide totals.
+- **Best Sellers / Recommendations** — ranks every priced product by profit/hr at a chosen level
+  and channel, flags the top earners, and adds the winners straight to your plan in one click.
 - **Materials sync** — aggregates every ingredient drawn by production, minus what your farms and
   gathering slots produce. Shows net/hr, current stock, **runway (hours to stockout)** and a
   status flag so you can rebalance before you run dry.
+- **Touchstone orders** — track this week's orders and required quantities; rolls them up into a
+  combined requirement with shortfall, time-to-fill from current production and a solo estimate.
 - **Labor** — ranks the best retainer for each job (Cook, Catering, Kilnwork, Brewing, Fishing,
   Hunting, Mining, Forestry) and shows how many slots each job is being asked to run.
 - **Save & share** — everything is stored in your browser; export/import the whole plan as JSON.

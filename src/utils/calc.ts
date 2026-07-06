@@ -220,6 +220,106 @@ export function bestRetainersFor(job: Job, recruitedOnly = true): { name: string
     .sort((a, b) => b.level - a.level || (b.confidant ? 1 : 0) - (a.confidant ? 1 : 0));
 }
 
+// ---- orders (touchstone) -------------------------------------------------
+export interface OrderItemReq {
+  item: string;
+  needed: number;
+  inStock: number;
+  shortfall: number;
+  netPerHr: number; // net production toward this item under the current plan
+  hoursToFill: number; // shortfall / netPerHr (Infinity if not accumulating)
+  soloHours: number; // shortfall made solo by one L4 worker (rough estimate)
+  canMake: boolean;
+  source: string;
+}
+
+/** Roll every un-done order up into per-item requirements vs stock & production. */
+export function computeOrderRequirements(plan: PlanState): OrderItemReq[] {
+  const flows = computeMaterialFlows(plan);
+  const flowByName: Record<string, { net: number }> = {};
+  for (const f of flows) flowByName[f.name] = { net: f.netPerHr };
+
+  const needed: Record<string, number> = {};
+  for (const o of plan.orders) {
+    if (o.done) continue;
+    for (const r of o.reqs) {
+      if (!r.item) continue;
+      needed[r.item] = (needed[r.item] ?? 0) + Math.max(0, r.qty || 0);
+    }
+  }
+
+  const reqs: OrderItemReq[] = [];
+  for (const item of Object.keys(needed)) {
+    const inStock = plan.inventory[item] ?? 0;
+    const shortfall = Math.max(0, needed[item] - inStock);
+    const net = flowByName[item]?.net ?? 0;
+    const hoursToFill = shortfall <= 0 ? 0 : net > 1e-6 ? shortfall / net : Infinity;
+    const product = PRODUCT_BY_NAME[item];
+    const mat = MATERIALS[item];
+    const soloRate = product
+      ? outputPerHr(product.job, 4)
+      : mat?.job
+      ? outputPerHr(mat.job, 4)
+      : 0;
+    const soloHours = shortfall <= 0 ? 0 : soloRate > 0 ? shortfall / soloRate : Infinity;
+    reqs.push({
+      item,
+      needed: needed[item],
+      inStock,
+      shortfall,
+      netPerHr: net,
+      hoursToFill,
+      soloHours,
+      canMake: !!product || !!mat?.job,
+      source: product?.industry ?? mat?.source ?? "—",
+    });
+  }
+  return reqs.sort((a, b) => b.shortfall - a.shortfall || b.needed - a.needed);
+}
+
+/** Every item that can appear in an order (products + materials). */
+export function orderableItems(): string[] {
+  const names = new Set<string>();
+  for (const p of PRODUCTS) names.add(p.name);
+  for (const m of Object.keys(MATERIALS)) names.add(m);
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+// ---- recommendations (profit ranking) ------------------------------------
+export interface ProductRanking {
+  product: Product;
+  price: number;
+  outPerHr: number;
+  revenuePerHr: number;
+  inputCostPerHr: number;
+  profitPerHr: number;
+  profitPerUnit: number;
+  estimated: boolean;
+}
+
+/** Rank every priced product by profit/hr at the given level, channel and best-seller flag. */
+export function rankProducts(level: number, channel: SellChannel, bestSeller: boolean): ProductRanking[] {
+  const est = efficiency(level).estimated;
+  return PRODUCTS.map((p) => {
+    const outPerHr = outputPerHr(p.job, level);
+    const price = salePrice(p, channel, bestSeller);
+    const revenuePerHr = outPerHr * price;
+    const inputCostPerHr = outPerHr * (p.inputCost ?? 0);
+    return {
+      product: p,
+      price,
+      outPerHr,
+      revenuePerHr,
+      inputCostPerHr,
+      profitPerHr: revenuePerHr - inputCostPerHr,
+      profitPerUnit: price - (p.inputCost ?? 0),
+      estimated: est,
+    };
+  })
+    .filter((r) => r.price > 0)
+    .sort((a, b) => b.profitPerHr - a.profitPerHr);
+}
+
 // ---- helpers -------------------------------------------------------------
 export function round(n: number, dp = 2): number {
   const f = Math.pow(10, dp);

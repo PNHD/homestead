@@ -6,12 +6,16 @@ import { StatCard } from "./components/Ui";
 import ProductionTab from "./components/ProductionTab";
 import MaterialsTab from "./components/MaterialsTab";
 import LaborTab from "./components/LaborTab";
+import OrdersTab from "./components/OrdersTab";
+import RecommendTab from "./components/RecommendTab";
 import DataTab from "./components/DataTab";
 
-type TabId = "production" | "materials" | "labor" | "data";
+type TabId = "production" | "recommend" | "materials" | "orders" | "labor" | "data";
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "production", label: "Production & Revenue", icon: "🍜" },
+  { id: "recommend", label: "Best Sellers", icon: "⭐" },
   { id: "materials", label: "Materials", icon: "🌾" },
+  { id: "orders", label: "Orders", icon: "📜" },
   { id: "labor", label: "Labor", icon: "🧑‍🌾" },
   { id: "data", label: "Data", icon: "💾" },
 ];
@@ -88,7 +92,9 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6">
         {tab === "production" && <ProductionTab plan={plan} setPlan={setPlan} />}
+        {tab === "recommend" && <RecommendTab plan={plan} setPlan={setPlan} />}
         {tab === "materials" && <MaterialsTab plan={plan} setPlan={setPlan} />}
+        {tab === "orders" && <OrdersTab plan={plan} setPlan={setPlan} />}
         {tab === "labor" && <LaborTab plan={plan} />}
         {tab === "data" && <DataTab plan={plan} setPlan={setPlan} />}
       </main>

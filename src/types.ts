@@ -29,11 +29,26 @@ export interface FarmLine {
   farms: number; // number of full farms/fields
 }
 
+/** A single requirement inside a touchstone order. */
+export interface OrderReq {
+  item: string;
+  qty: number;
+}
+
+/** A weekly touchstone order: a set of item quantities to deliver. */
+export interface Order {
+  id: string;
+  name: string;
+  reqs: OrderReq[];
+  done: boolean;
+}
+
 export interface PlanState {
   homesteadLevel: number;
   craftLines: CraftLine[];
   gatherLines: GatherLine[];
   farmLines: FarmLine[];
+  orders: Order[];
   inventory: Record<string, number>;
   /** hours you want each material's stock to last (runway target) */
   runwayTargetH: number;
@@ -44,6 +59,7 @@ export const emptyPlan = (): PlanState => ({
   craftLines: [],
   gatherLines: [],
   farmLines: [],
+  orders: [],
   inventory: {},
   runwayTargetH: 24,
 });
