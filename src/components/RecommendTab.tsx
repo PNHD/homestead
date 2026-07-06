@@ -19,7 +19,10 @@ export default function RecommendTab({
   const [bestSeller, setBestSeller] = useState(false);
   const [industry, setIndustry] = useState<Industry | "All">("All");
 
-  const ranked = useMemo(() => rankProducts(level, channel, bestSeller), [level, channel, bestSeller]);
+  const ranked = useMemo(
+    () => rankProducts(level, channel, bestSeller, plan.priceOverrides),
+    [level, channel, bestSeller, plan.priceOverrides]
+  );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),
     [ranked, industry]

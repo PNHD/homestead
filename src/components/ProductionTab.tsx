@@ -39,7 +39,7 @@ export default function ProductionTab({
       ],
     }));
 
-  const calcs = plan.craftLines.map(calcCraftLine);
+  const calcs = plan.craftLines.map((l) => calcCraftLine(l, plan.priceOverrides));
   const totRev = calcs.reduce((s, c) => s + c.revenuePerHr, 0);
   const totProfit = calcs.reduce((s, c) => s + c.profitPerHr, 0);
 
@@ -80,7 +80,7 @@ export default function ProductionTab({
             </thead>
             <tbody>
               {plan.craftLines.map((line) => {
-                const c = calcCraftLine(line);
+                const c = calcCraftLine(line, plan.priceOverrides);
                 const p = PRODUCT_BY_NAME[line.productName];
                 const retOptions = p
                   ? [

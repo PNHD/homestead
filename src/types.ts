@@ -43,6 +43,12 @@ export interface Order {
   done: boolean;
 }
 
+/** Per-product manual price override (for items missing data in the source sheets). */
+export interface PriceOverride {
+  merchant?: number;
+  restaurant?: number;
+}
+
 export interface PlanState {
   homesteadLevel: number;
   craftLines: CraftLine[];
@@ -52,7 +58,17 @@ export interface PlanState {
   inventory: Record<string, number>;
   /** hours you want each material's stock to last (runway target) */
   runwayTargetH: number;
+  /** crafting slot capacity per industry (used by the optimizer & dashboard) */
+  industrySlots: Record<string, number>;
+  /** manual price overrides keyed by product name */
+  priceOverrides: Record<string, PriceOverride>;
 }
+
+export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = {
+  Inn: 3,
+  Kiln: 3,
+  Brewery: 3,
+};
 
 export const emptyPlan = (): PlanState => ({
   homesteadLevel: 6,
@@ -62,4 +78,6 @@ export const emptyPlan = (): PlanState => ({
   orders: [],
   inventory: {},
   runwayTargetH: 24,
+  industrySlots: { ...DEFAULT_INDUSTRY_SLOTS },
+  priceOverrides: {},
 });

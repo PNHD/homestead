@@ -53,8 +53,18 @@ export function outputPerHr(job: Job | string, level: number): number {
 }
 
 // ---- price ---------------------------------------------------------------
-export function salePrice(p: Product, channel: SellChannel, bestSeller: boolean): number {
-  const base = channel === "restaurant" ? p.restaurant ?? p.merchant ?? 0 : p.merchant ?? 0;
+export type PriceOverrides = Record<string, { merchant?: number; restaurant?: number }>;
+
+export function salePrice(
+  p: Product,
+  channel: SellChannel,
+  bestSeller: boolean,
+  overrides: PriceOverrides = {}
+): number {
+  const ov = overrides[p.name];
+  const merchant = ov?.merchant ?? p.merchant;
+  const restaurant = ov?.restaurant ?? p.restaurant;
+  const base = channel === "restaurant" ? restaurant ?? merchant ?? 0 : merchant ?? restaurant ?? 0;
   return bestSeller ? round(base * (1 + BEST_SELLER_BONUS)) : base;
 }
 
@@ -71,12 +81,12 @@ export interface CraftLineCalc {
   retainerOk: boolean; // assigned retainer actually has this job at >= level
 }
 
-export function calcCraftLine(line: CraftLine): CraftLineCalc {
+export function calcCraftLine(line: CraftLine, overrides: PriceOverrides = {}): CraftLineCalc {
   const product = PRODUCT_BY_NAME[line.productName];
   const eff = efficiency(line.level);
   const perSlot = product ? outputPerHr(product.job, line.level) : 0;
   const outPerHr = perSlot * Math.max(0, line.slots);
-  const price = product ? salePrice(product, line.channel, line.bestSeller) : 0;
+  const price = product ? salePrice(product, line.channel, line.bestSeller, overrides) : 0;
   const revenuePerHr = outPerHr * price;
   const inputCostPerHr = outPerHr * (product?.inputCost ?? 0);
   return {
@@ -122,7 +132,7 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
 
   // craft lines consume ingredients (and produce their own product)
   for (const line of plan.craftLines) {
-    const c = calcCraftLine(line);
+    const c = calcCraftLine(line, plan.priceOverrides);
     if (!c.product) continue;
     touch(produced, c.product.name, c.outPerHr);
     for (const ing of c.product.ingredients) {
@@ -183,7 +193,7 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
   let cost = 0;
   let craftSlots = 0;
   for (const line of plan.craftLines) {
-    const c = calcCraftLine(line);
+    const c = calcCraftLine(line, plan.priceOverrides);
     rev += c.revenuePerHr;
     cost += c.inputCostPerHr;
     craftSlots += Math.max(0, line.slots);
@@ -298,11 +308,16 @@ export interface ProductRanking {
 }
 
 /** Rank every priced product by profit/hr at the given level, channel and best-seller flag. */
-export function rankProducts(level: number, channel: SellChannel, bestSeller: boolean): ProductRanking[] {
+export function rankProducts(
+  level: number,
+  channel: SellChannel,
+  bestSeller: boolean,
+  overrides: PriceOverrides = {}
+): ProductRanking[] {
   const est = efficiency(level).estimated;
   return PRODUCTS.map((p) => {
     const outPerHr = outputPerHr(p.job, level);
-    const price = salePrice(p, channel, bestSeller);
+    const price = salePrice(p, channel, bestSeller, overrides);
     const revenuePerHr = outPerHr * price;
     const inputCostPerHr = outPerHr * (p.inputCost ?? 0);
     return {
@@ -320,7 +335,132 @@ export function rankProducts(level: number, channel: SellChannel, bestSeller: bo
     .sort((a, b) => b.profitPerHr - a.profitPerHr);
 }
 
+/** Products that have no recorded price in any source sheet (candidates for a manual override). */
+export const PRODUCTS_MISSING_PRICE: Product[] = PRODUCTS.filter(
+  (p) => p.merchant == null && p.restaurant == null
+);
+
+// ---- dashboard: per-industry breakdown -----------------------------------
+export interface IndustryStat {
+  industry: string;
+  slotsUsed: number;
+  slotsCapacity: number;
+  revenuePerHr: number;
+  profitPerHr: number;
+}
+
+const CRAFT_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
+
+export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
+  const used: Record<string, number> = {};
+  const rev: Record<string, number> = {};
+  const prof: Record<string, number> = {};
+  for (const line of plan.craftLines) {
+    const c = calcCraftLine(line, plan.priceOverrides);
+    const ind = c.product?.industry ?? "Inn";
+    used[ind] = (used[ind] ?? 0) + Math.max(0, line.slots);
+    rev[ind] = (rev[ind] ?? 0) + c.revenuePerHr;
+    prof[ind] = (prof[ind] ?? 0) + c.profitPerHr;
+  }
+  return CRAFT_INDUSTRIES.map((ind) => ({
+    industry: ind,
+    slotsUsed: used[ind] ?? 0,
+    slotsCapacity: plan.industrySlots[ind] ?? 0,
+    revenuePerHr: rev[ind] ?? 0,
+    profitPerHr: prof[ind] ?? 0,
+  }));
+}
+
+// ---- optimizer -----------------------------------------------------------
+export interface OptimizeOptions {
+  level: number;
+  channel: SellChannel;
+  bestSeller: boolean;
+  ordersFirst: boolean; // reserve one slot per craftable order item that is short
+}
+export interface OptimizeResult {
+  lines: CraftLine[];
+  revenuePerHr: number;
+  profitPerHr: number;
+  notes: string[];
+}
+
+/**
+ * Greedy per-industry allocation: optionally reserve one slot for each short,
+ * craftable order item, then fill the remaining slots with the highest
+ * profit/hr product in that industry. Maximises profit/hr under the slot caps.
+ */
+export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeResult {
+  const ranked = rankProducts(opts.level, opts.channel, opts.bestSeller, plan.priceOverrides);
+  const bestByIndustry: Record<string, ProductRanking | undefined> = {};
+  for (const r of ranked) {
+    const ind = r.product.industry;
+    if (!bestByIndustry[ind]) bestByIndustry[ind] = r; // ranked is already sorted desc
+  }
+
+  // order items that are short and craftable, grouped by industry
+  const shortByIndustry: Record<string, Set<string>> = {};
+  if (opts.ordersFirst) {
+    for (const req of computeOrderRequirements(plan)) {
+      if (req.shortfall <= 0) continue;
+      const p = PRODUCT_BY_NAME[req.item];
+      if (!p) continue;
+      (shortByIndustry[p.industry] ??= new Set()).add(p.name);
+    }
+  }
+
+  const lines: CraftLine[] = [];
+  const notes: string[] = [];
+  for (const ind of CRAFT_INDUSTRIES) {
+    let cap = plan.industrySlots[ind] ?? 0;
+    if (cap <= 0) continue;
+    // reserve slots for short order items
+    for (const name of shortByIndustry[ind] ?? []) {
+      if (cap <= 0) break;
+      lines.push({
+        id: uidLocal(),
+        productName: name,
+        retainer: bestRetainersFor(PRODUCT_BY_NAME[name].job)[0]?.name ?? "",
+        level: opts.level,
+        slots: 1,
+        channel: opts.channel,
+        bestSeller: opts.bestSeller,
+      });
+      cap -= 1;
+    }
+    // fill the rest with the best earner
+    const best = bestByIndustry[ind];
+    if (best && cap > 0) {
+      lines.push({
+        id: uidLocal(),
+        productName: best.product.name,
+        retainer: bestRetainersFor(best.product.job)[0]?.name ?? "",
+        level: opts.level,
+        slots: cap,
+        channel: opts.channel,
+        bestSeller: opts.bestSeller,
+      });
+    } else if (!best) {
+      notes.push(`No priced product for ${ind} — left empty.`);
+    }
+  }
+
+  let revenuePerHr = 0;
+  let profitPerHr = 0;
+  for (const line of lines) {
+    const c = calcCraftLine(line, plan.priceOverrides);
+    revenuePerHr += c.revenuePerHr;
+    profitPerHr += c.profitPerHr;
+  }
+  return { lines, revenuePerHr, profitPerHr, notes };
+}
+
 // ---- helpers -------------------------------------------------------------
+let _uid = 0;
+function uidLocal(): string {
+  _uid += 1;
+  return `opt${Date.now().toString(36)}${_uid}`;
+}
 export function round(n: number, dp = 2): number {
   const f = Math.pow(10, dp);
   return Math.round(n * f) / f;
