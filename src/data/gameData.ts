@@ -37,11 +37,18 @@ export const RETAINERS: Retainer[] = [{"name": "Angler", "recruited": false, "co
 
 export const BASE_RATES: Record<string, number> = {"Cook": 1.0, "Cater": 1.0, "Kilnwork": 4.0, "Brewing": 1.0, "Fishing": 5.0, "Hunting": 5.0, "Mining": 5.0, "Forestry": 5.0, "Timber": 10.0};
 
-// Efficiency multiplier by skill level. Lv1-4 verified from the sheet; Lv5+ are unknown and,
-// per the sheet's note, fall back to the base rate (multiplier 1.0, no bonus).
-export const EFF_MULT_VERIFIED: Record<number, number> = {1: 1.02, 2: 1.05, 3: 1.07, 4: 1.10};
-export const EFF_MULT_VERIFIED_MAX = 4;
-export const EFF_MULT_UNKNOWN = 1.0;
+// Efficiency multiplier by skill level, from the Retainer Guide (Details tab):
+// L1 102%, L2 105%, L3 107%, L4 110%, L5 112%, L6 125%. The big L6 jump is the
+// Mystic Skill, which only Cook/Kilnwork/Fishing/Hunting/Mining/Forestry get —
+// Brewing & Catering have no Mystic Skill, so their L6 uses the pre-mystic value.
+// L7-10 are not published yet; held at the best known value (never below L6).
+export const EFF_MULT_VERIFIED: Record<number, number> = {1: 1.02, 2: 1.05, 3: 1.07, 4: 1.10, 5: 1.12, 6: 1.25};
+export const EFF_MULT_VERIFIED_MAX = 6;
+export const EFF_MULT_UNKNOWN = 1.25; // L7+ floor (unknown; assumed no worse than L6)
+// Jobs that gain the Mystic Skill at L6 (the +5%+ that makes L6 = 125%).
+export const MYSTIC_JOBS: readonly string[] = ["Cook", "Kilnwork", "Fishing", "Hunting", "Mining", "Forestry"];
+// Brewing/Catering L6: no Mystic jump, so they hold the L5 curve (estimate — sheet gives no exact figure).
+export const EFF_L6_NO_MYSTIC = 1.12;
 
 export const BEST_SELLER_BONUS = 0.2;
 

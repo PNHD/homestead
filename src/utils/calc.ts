@@ -12,6 +12,8 @@ import {
   EFF_MULT_VERIFIED,
   EFF_MULT_VERIFIED_MAX,
   EFF_MULT_UNKNOWN,
+  MYSTIC_JOBS,
+  EFF_L6_NO_MYSTIC,
   BEST_SELLER_BONUS,
   PRODUCTS,
   MATERIALS,
@@ -52,19 +54,22 @@ export interface Eff {
   mult: number;
   estimated: boolean;
 }
-export function efficiency(level: number): Eff {
+export function efficiency(level: number, job?: Job | string): Eff {
   const lv = Math.max(1, Math.round(level));
-  if (lv <= EFF_MULT_VERIFIED_MAX) {
-    return { mult: EFF_MULT_VERIFIED[lv] ?? 1.02, estimated: false };
+  const mystic = !!job && MYSTIC_JOBS.includes(job);
+  if (lv <= 5) return { mult: EFF_MULT_VERIFIED[lv] ?? 1.02, estimated: false };
+  if (lv === EFF_MULT_VERIFIED_MAX) {
+    // L6: mystic jobs jump to 125%; Brewing/Catering hold the pre-mystic value.
+    return mystic ? { mult: EFF_MULT_VERIFIED[6], estimated: false } : { mult: EFF_L6_NO_MYSTIC, estimated: true };
   }
-  // Lv5+ multipliers are unknown in the sheet — fall back to the base rate (no bonus).
-  return { mult: EFF_MULT_UNKNOWN, estimated: true };
+  // L7-10 not published: hold at the best known value for this job.
+  return { mult: mystic ? EFF_MULT_UNKNOWN : EFF_L6_NO_MYSTIC, estimated: true };
 }
 
 /** Items produced per hour by one retainer at a job & skill level. */
 export function outputPerHr(job: Job | string, level: number): number {
   const base = BASE_RATES[job] ?? 1;
-  return base * efficiency(level).mult;
+  return base * efficiency(level, job).mult;
 }
 
 /** A retainer's effective skill level for a job — user override wins over the sheet. */
@@ -120,7 +125,7 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
     revenuePerHr,
     inputCostPerHr,
     profitPerHr: revenuePerHr - inputCostPerHr,
-    estimated: level > EFF_MULT_VERIFIED_MAX,
+    estimated: active ? efficiency(level, product!.job).estimated : false,
     active,
   };
 }
@@ -234,7 +239,7 @@ export function calcServeLine(line: ServeLine, plan: PlanState): ServeLineCalc {
     servedPerHr,
     innPrice: price,
     incomePerHr: servedPerHr * price,
-    estimated: level > EFF_MULT_VERIFIED_MAX,
+    estimated: active ? efficiency(level, "Catering").estimated : false,
     active,
   };
 }
@@ -530,7 +535,7 @@ export function rankProductsForRoster(plan: PlanState, bestSeller: boolean): Ros
       inputCostPerHr,
       profitPerHr: revenuePerHr - inputCostPerHr,
       profitPerUnit: price - (p.inputCost ?? 0),
-      estimated: useLevel > EFF_MULT_VERIFIED_MAX,
+      estimated: efficiency(useLevel, p.job).estimated,
       level,
       hasRetainer: level > 0,
     };
