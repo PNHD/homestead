@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { PlanState } from "../types";
-import { buildWeeklyPlan, fmt } from "../utils/calc";
+import { buildWeeklyPlan, farmFieldsForLevel, fmt, PRODUCT_BY_NAME, CROP_BY_NAME } from "../utils/calc";
 import { NumberInput, Money, SectionTitle } from "./Ui";
 
 const CRAFT_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
@@ -14,10 +14,11 @@ export default function WeeklyPlanTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const [bestSeller, setBestSeller] = useState(false);
+  const [cropBudget, setCropBudget] = useState<number>(farmFieldsForLevel(plan.homesteadLevel));
 
   const wp = useMemo(
-    () => buildWeeklyPlan(plan, { bestSeller, ordersFirst: true, materialSafe: true }),
-    [plan, bestSeller]
+    () => buildWeeklyPlan(plan, { bestSeller, ordersFirst: true, materialSafe: true, cropBudget }),
+    [plan, bestSeller, cropBudget]
   );
 
   const setSlots = (ind: string, n: number) =>
@@ -31,6 +32,17 @@ export default function WeeklyPlanTab({
     }));
 
   const staffed = wp.production.filter((r) => r.retainer).length + wp.catering.filter((r) => r.retainer).length;
+
+  const cropsUsed = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of wp.production) {
+      PRODUCT_BY_NAME[r.productName]?.ingredients.forEach((i) => {
+        if (CROP_BY_NAME[i.name]) s.add(i.name);
+      });
+    }
+    return [...s];
+  }, [wp.production]);
+  const overCropBudget = cropsUsed.length > cropBudget;
 
   return (
     <div className="space-y-5">
@@ -49,6 +61,10 @@ export default function WeeklyPlanTab({
         <label className="text-xs text-gray-400">
           Restaurant slots
           <NumberInput value={plan.industrySlots.Restaurant ?? 0} min={0} onChange={(n) => setSlots("Restaurant", n)} className="mt-1 w-20" />
+        </label>
+        <label className="text-xs text-gray-400" title="How many different farm crops your fields can grow. L6 = 3 fields, L7+ = 4.">
+          Farm crops (fields)
+          <NumberInput value={cropBudget} min={1} max={4} onChange={setCropBudget} className="mt-1 w-20" />
         </label>
         <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
           <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={bestSeller} onChange={(e) => setBestSeller(e.target.checked)} />
@@ -70,6 +86,14 @@ export default function WeeklyPlanTab({
           ))}
         </ul>
       )}
+
+      {/* crop-budget summary */}
+      <div className={`card p-3 text-sm ${overCropBudget ? "text-amber-300" : "text-gray-400"}`}>
+        Plan uses <span className="font-semibold">{cropsUsed.length}</span> of {cropBudget} farm{" "}
+        {cropBudget === 1 ? "field" : "fields"}
+        {cropsUsed.length > 0 && <>: {cropsUsed.join(", ")}</>}
+        {overCropBudget && " — over your field budget, you'll have to buy or hand-juggle the extra crop."}
+      </div>
 
       {/* 1. Farming */}
       <Stage n={1} icon="🌾" title="Grow (farm fields)" empty={wp.farming.length === 0} emptyText="Crops are keeping up — nothing extra to plant.">

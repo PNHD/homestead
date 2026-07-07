@@ -592,6 +592,20 @@ export interface OptimizeOptions {
   bestSeller: boolean;
   ordersFirst: boolean; // reserve a slot per short, craftable order item
   materialSafe?: boolean; // avoid picks that push ingredients below the runway target
+  cropBudget?: number; // max distinct farm crops the plan may rely on (= farm fields)
+}
+
+/** Farm fields available at a homestead level (L6 = 3, L7+ = 4; lower levels are best-guess). */
+export function farmFieldsForLevel(level: number): number {
+  if (level >= 7) return 4;
+  if (level >= 6) return 3;
+  if (level >= 5) return 2;
+  return 1;
+}
+
+/** The farm crops a recipe consumes (ingredients that are growable crops). */
+function cropsOf(p: Product): string[] {
+  return p.ingredients.filter((i) => CROP_BY_NAME[i.name]).map((i) => i.name);
 }
 export interface OptimizeResult {
   lines: CraftLine[];
@@ -632,6 +646,9 @@ function bestProductForIndustry(
   const basePlan: PlanState = { ...plan, craftLines: lines };
   const base = computeSummary(basePlan, computeMaterialFlows(basePlan));
   const materialSafe = opts.materialSafe !== false;
+  const cropBudget = opts.cropBudget ?? Infinity;
+  // crops the already-chosen lines commit us to (a field each)
+  const usedCrops = new Set(lines.flatMap((l) => (PRODUCT_BY_NAME[l.productName] ? cropsOf(PRODUCT_BY_NAME[l.productName]) : [])));
   const candidates: OptimizeCandidate[] = [];
 
   for (const p of PRODUCTS) {
@@ -646,6 +663,9 @@ function bestProductForIndustry(
     const summary = computeSummary(probe, flows);
     const badIngredients = materialSafe ? badIngredientsFor(p, flows) : [];
     const gain = summary.profitPerHr - base.profitPerHr;
+    // how many NEW farm crops (fields) this pick would add beyond the budget
+    const totalCrops = new Set([...usedCrops, ...cropsOf(p)]).size;
+    const overBudget = Math.max(0, totalCrops - cropBudget);
     candidates.push({
       product: p,
       retainer,
@@ -653,7 +673,8 @@ function bestProductForIndustry(
       revenuePerHr: summary.revenuePerHr,
       badIngredients,
       // ponytail: greedy score; replace with linear programming if slot/material constraints get complex.
-      score: gain - badIngredients.length * 1_000_000,
+      // stockout is a hard no; exceeding the field budget is a soft penalty (prefers crop-sharing recipes).
+      score: gain - badIngredients.length * 1_000_000 - overBudget * 100_000,
     });
   }
 
