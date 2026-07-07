@@ -442,6 +442,18 @@ export function isRecruited(name: string, plan: PlanState): boolean {
   return RETAINER_BY_NAME[name]?.recruited ?? false;
 }
 
+/** Retainers already assigned to a production/catering/gather line (excluding one line id). */
+export function busyRetainers(plan: PlanState, exceptId?: string): Set<string> {
+  const busy = new Set<string>();
+  const add = (id: string, name: string) => {
+    if (name && id !== exceptId) busy.add(name);
+  };
+  for (const l of plan.craftLines) add(l.id, l.retainer);
+  for (const l of plan.serveLines ?? []) add(l.id, l.retainer);
+  for (const l of plan.gatherLines) add(l.id, l.retainer);
+  return busy;
+}
+
 /** Recruited sheet retainers who can do a job, highest skill first. */
 export function recruitedRetainersFor(job: Job, plan: PlanState): RetainerPick[] {
   return rosterEntries(plan)

@@ -7,6 +7,7 @@ import {
   computeMaterialFlows,
   computeServe,
   recruitedRetainersFor,
+  busyRetainers,
   fmt,
   PRODUCT_BY_NAME,
 } from "../utils/calc";
@@ -135,13 +136,16 @@ export default function ProductionTab({
                   const c = calcCraftLine(line, plan);
                   const p = PRODUCT_BY_NAME[line.productName];
                   const runway = productRunway(p, flows);
+                  const busy = busyRetainers(plan, line.id);
                   const retOptions = p
                     ? [
                         { value: "", label: "- assign retainer -" },
-                        ...recruitedRetainersFor(p.job, plan).map((r) => ({
-                          value: r.name,
-                          label: `${r.name} - ${p.job} L${r.level}${r.confidant ? " *" : ""}`,
-                        })),
+                        ...recruitedRetainersFor(p.job, plan)
+                          .filter((r) => !busy.has(r.name))
+                          .map((r) => ({
+                            value: r.name,
+                            label: `${r.name} - ${p.job} L${r.level}${r.confidant ? " *" : ""}`,
+                          })),
                       ]
                     : [{ value: "", label: "-" }];
                   return (
@@ -203,9 +207,12 @@ export default function ProductionTab({
                 {(plan.serveLines ?? []).map((line) => {
                   const s = calcServeLine(line, plan);
                   const runway = itemRunway(line.productName, flows);
+                  const busy = busyRetainers(plan, line.id);
                   const retOptions = [
                     { value: "", label: "- assign caterer -" },
-                    ...recruitedRetainersFor("Catering", plan).map((r) => ({ value: r.name, label: `${r.name} - Catering L${r.level}${r.confidant ? " *" : ""}` })),
+                    ...recruitedRetainersFor("Catering", plan)
+                      .filter((r) => !busy.has(r.name))
+                      .map((r) => ({ value: r.name, label: `${r.name} - Catering L${r.level}${r.confidant ? " *" : ""}` })),
                   ];
                   return (
                     <tr key={line.id} className="border-b border-line/50 last:border-0">

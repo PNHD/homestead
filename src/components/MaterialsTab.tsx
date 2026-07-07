@@ -6,6 +6,7 @@ import {
   computeMaterialFlows,
   GATHERABLE_MATERIALS,
   recruitedRetainersFor,
+  busyRetainers,
   orderableItems,
   parseItemQtyLines,
   fmt,
@@ -88,12 +89,15 @@ export default function MaterialsTab({
             <div className="space-y-2">
               {plan.gatherLines.map((g) => {
                 const job = MATERIALS[g.materialName]?.job as Job | undefined;
+                const busy = busyRetainers(plan, g.id);
                 const retOpts = [
                   { value: "", label: "— assign retainer —" },
-                  ...(job ? recruitedRetainersFor(job, plan) : []).map((r) => ({
-                    value: r.name,
-                    label: `${r.name} · L${r.level}`,
-                  })),
+                  ...(job ? recruitedRetainersFor(job, plan) : [])
+                    .filter((r) => !busy.has(r.name))
+                    .map((r) => ({
+                      value: r.name,
+                      label: `${r.name} · L${r.level}`,
+                    })),
                 ];
                 return (
                   <div key={g.id} className="flex items-center gap-2">
