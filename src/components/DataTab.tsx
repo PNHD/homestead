@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { PlanState, PriceOverride } from "../types";
-import { emptyPlan } from "../types";
+import { emptyPlan, slotsForLevel } from "../types";
 import { exportPlan, importPlan } from "../utils/storage";
 import { PRODUCTS, MATERIALS, RETAINERS, CROPS, type Job } from "../data/gameData";
 import { NumberInput, SectionTitle } from "./Ui";
@@ -106,13 +106,26 @@ export default function DataTab({
             <NumberInput
               value={plan.homesteadLevel}
               min={1}
-              max={20}
-              onChange={(n) => setPlan((p) => ({ ...p, homesteadLevel: n }))}
+              max={10}
+              onChange={(n) => {
+                const s = slotsForLevel(n);
+                setPlan((p) => ({ ...p, homesteadLevel: n, industrySlots: { ...s.industry }, skillSlots: { ...s.skill } }));
+              }}
               className="w-20"
             />
           </label>
+          <button
+            className="btn"
+            onClick={() => {
+              const s = slotsForLevel(plan.homesteadLevel);
+              setPlan((p) => ({ ...p, industrySlots: { ...s.industry }, skillSlots: { ...s.skill } }));
+            }}
+          >
+            Reset slots to Lv {plan.homesteadLevel} defaults
+          </button>
           <span className="text-xs text-gray-500">
-            Used as a reference for which recipes/crops you can access.
+            Level gates recipes/crops and sets slot capacities below (L6 = 3 stoves, 6 tables, 4 kiln, 3 brew,
+            3 per gather node). Fine-tune to your actual buildings.
           </span>
         </div>
       </div>

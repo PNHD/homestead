@@ -88,27 +88,32 @@ export interface PlanState {
   soldAt: Record<string, number>;
 }
 
-// Slot capacities at homestead Lv 6 (from the planner's Dashboard/Retainer Plan).
-// Kitchen cooks, Restaurant serves, Kiln/Brewery craft, Local Specialties gather.
-export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = {
-  Inn: 3,
-  Restaurant: 6,
-  Kiln: 3,
-  Brewery: 3,
-  "Local Specialties": 12,
-};
+export interface LevelSlots {
+  industry: Record<string, number>;
+  skill: Partial<Record<Job, number>>;
+}
 
-// Retainer skill slots at homestead Lv 6 (from the planner's Retainer Plan).
-export const DEFAULT_SKILL_SLOTS: Partial<Record<Job, number>> = {
-  Cook: 2,
-  Catering: 6,
-  Kilnwork: 2,
-  Brewing: 3,
-  Fishing: 2,
-  Mining: 3,
-  Forestry: 1,
-  Hunting: 0,
-};
+/**
+ * Slot CAPACITIES by homestead level (how many retainers each facility can staff).
+ * L6 is anchored to real in-game values: 3 kitchen stoves, 6 restaurant tables,
+ * 4 kiln workers, 3 brewery slots, 3 workers per gather node (player-confirmed +
+ * beginner guide). Other levels are a best-effort estimate — edit in the Data tab.
+ * NOTE: these are physical capacities, not the game's weekly "slots to fill" hint.
+ */
+export function slotsForLevel(level: number): LevelSlots {
+  const cook = level >= 6 ? 3 : level >= 4 ? 2 : 1;
+  const cater = level >= 6 ? 6 : level >= 4 ? 4 : 2;
+  const kiln = level >= 6 ? 4 : level >= 4 ? 3 : level >= 3 ? 2 : 1;
+  const brew = level >= 5 ? 3 : level >= 3 ? 2 : 1;
+  const gather = level >= 6 ? 3 : level >= 4 ? 2 : 1;
+  return {
+    industry: { Inn: cook, Restaurant: cater, Kiln: kiln, Brewery: brew, "Local Specialties": gather * 4 },
+    skill: { Cook: cook, Catering: cater, Kilnwork: kiln, Brewing: brew, Fishing: gather, Hunting: gather, Mining: gather, Forestry: gather },
+  };
+}
+
+export const DEFAULT_INDUSTRY_SLOTS: Record<string, number> = slotsForLevel(6).industry;
+export const DEFAULT_SKILL_SLOTS: Partial<Record<Job, number>> = slotsForLevel(6).skill;
 
 export const emptyPlan = (): PlanState => ({
   homesteadLevel: 6,

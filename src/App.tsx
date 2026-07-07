@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PlanState } from "./types";
+import { slotsForLevel } from "./types";
 import { loadPlan, savePlan } from "./utils/storage";
 import { computeMaterialFlows, computeSummary, fmtMoney } from "./utils/calc";
 import { StatCard } from "./components/Ui";
@@ -70,8 +71,12 @@ export default function App() {
                 <select
                   className="input w-16 py-1"
                   value={plan.homesteadLevel}
-                  onChange={(e) => setPlan((p) => ({ ...p, homesteadLevel: Number(e.target.value) }))}
-                  title="Gates which recipes the recommendations offer"
+                  onChange={(e) => {
+                    const lv = Number(e.target.value);
+                    const s = slotsForLevel(lv);
+                    setPlan((p) => ({ ...p, homesteadLevel: lv, industrySlots: { ...s.industry }, skillSlots: { ...s.skill } }));
+                  }}
+                  title="Gates recipes and sets this level's slot capacities"
                 >
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((lv) => (
                     <option key={lv} value={lv}>
