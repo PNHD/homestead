@@ -19,7 +19,7 @@ export default function RecommendTab({
 
   const ranked = useMemo(
     () => rankProductsForRoster(plan, bestSeller),
-    [plan.priceOverrides, plan.manualPricesEnabled, plan.retainerLevels, plan.recruitedOverride, bestSeller]
+    [plan.priceOverrides, plan.manualPricesEnabled, plan.retainerLevels, plan.recruitedOverride, plan.homesteadLevel, bestSeller]
   );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),
@@ -37,7 +37,7 @@ export default function RecommendTab({
 
   return (
     <div className="space-y-4">
-      <SectionTitle hint="Ranked by profit per item (fixed). Profit/hr uses your best retainer's level for that job.">
+      <SectionTitle hint={`Ranked by profit per item. Only recipes unlocked at Homestead Lv ${plan.homesteadLevel} are shown.`}>
         Best sellers &amp; recommendations
       </SectionTitle>
 

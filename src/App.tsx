@@ -61,9 +61,22 @@ export default function App() {
                 Auto revenue · income · material sync · retainer labor — Where Winds Meet
               </p>
             </div>
-            <div className="text-right text-xs text-gray-500">
-              <div>Homestead Lv {plan.homesteadLevel}</div>
-              <div>Data: official Planner v2.0 + Arbiter</div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <label className="flex items-center gap-1.5 text-gray-400">
+                Homestead Lv
+                <select
+                  className="input w-16 py-1"
+                  value={plan.homesteadLevel}
+                  onChange={(e) => setPlan((p) => ({ ...p, homesteadLevel: Number(e.target.value) }))}
+                  title="Gates which recipes the recommendations offer"
+                >
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((lv) => (
+                    <option key={lv} value={lv}>
+                      {lv}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
 

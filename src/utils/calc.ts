@@ -34,6 +34,11 @@ export const GATHERABLE_MATERIALS = Object.values(MATERIALS).filter(
   (m) => m.job && ["Fishing", "Hunting", "Mining", "Forestry"].includes(m.job)
 );
 
+/** A recipe is unlocked once your homestead level reaches its required level. */
+export function isUnlocked(p: Product, homesteadLevel: number): boolean {
+  return (p.lvl ?? 1) <= homesteadLevel;
+}
+
 export type PriceOverrides = Record<string, { inn?: number; trade?: number }>;
 export type RetainerLevels = Record<string, Partial<Record<Job, number>>>;
 
@@ -447,7 +452,7 @@ export function computeOrderRequirements(plan: PlanState): OrderItemReq[] {
       shortfall,
       netPerHr: net,
       hoursToFill,
-      canMake: !!product || !!mat?.job,
+      canMake: (!!product && isUnlocked(product, plan.homesteadLevel)) || !!mat?.job,
       source: product?.industry ?? mat?.source ?? "—",
     });
   }
@@ -509,7 +514,7 @@ export interface RosterRanking extends ProductRanking {
  */
 export function rankProductsForRoster(plan: PlanState, bestSeller: boolean): RosterRanking[] {
   const ov = activeOverrides(plan);
-  return PRODUCTS.map((p) => {
+  return PRODUCTS.filter((p) => isUnlocked(p, plan.homesteadLevel)).map((p) => {
     const best = recruitedRetainersFor(p.job, plan)[0];
     const level = best?.level ?? 0;
     const useLevel = level > 0 ? level : 4;
@@ -626,6 +631,7 @@ function bestProductForIndustry(
 
   for (const p of PRODUCTS) {
     if (p.industry !== ind) continue;
+    if (!isUnlocked(p, plan.homesteadLevel)) continue;
     if (innPrice(p, opts.bestSeller, activeOverrides(plan)) <= 0) continue;
     const retainer = nextRetainer(p.job, used, plan);
     if (!retainer) continue;
