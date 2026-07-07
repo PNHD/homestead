@@ -7,6 +7,7 @@ import {
   GATHERABLE_MATERIALS,
   recruitedRetainersFor,
   orderableItems,
+  parseItemQtyLines,
   fmt,
 } from "../utils/calc";
 import { NumberInput, Combobox, StatusChip, SectionTitle } from "./Ui";
@@ -31,6 +32,7 @@ export default function MaterialsTab({
 }) {
   const flows = computeMaterialFlows(plan);
   const [addItem, setAddItem] = useState("");
+  const [bulkStock, setBulkStock] = useState("");
 
   // gather line helpers
   const addGather = () =>
@@ -57,6 +59,15 @@ export default function MaterialsTab({
   const setStock = (name: string, v: number) =>
     setPlan((p) => ({ ...p, inventory: { ...p.inventory, [name]: v } }));
   const setRunway = (v: number) => setPlan((p) => ({ ...p, runwayTargetH: v }));
+  const importStock = () => {
+    const rows = parseItemQtyLines(bulkStock, ITEM_OPTIONS.map((o) => o.value));
+    if (rows.length === 0) return;
+    setPlan((p) => ({
+      ...p,
+      inventory: rows.reduce((inv, r) => ({ ...inv, [r.item]: r.qty }), { ...p.inventory }),
+    }));
+    setBulkStock("");
+  };
 
   return (
     <div className="space-y-6">
@@ -168,6 +179,15 @@ export default function MaterialsTab({
             className="w-72"
           />
           <span className="text-xs text-gray-500">then set its quantity in the table below.</span>
+          <textarea
+            className="input min-h-20 w-full"
+            value={bulkStock}
+            onChange={(e) => setBulkStock(e.target.value)}
+            placeholder={"Paste stock, one per line: Tomato 120"}
+          />
+          <button className="btn btn-gold" onClick={importStock} disabled={!bulkStock.trim()}>
+            Import stock lines
+          </button>
         </div>
 
         {flows.length === 0 ? (

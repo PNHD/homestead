@@ -99,6 +99,14 @@ export default function LaborTab({
   const clearAll = () =>
     setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, false])) }));
   const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {} }));
+  const recruitPriority = () =>
+    setPlan((p) => ({
+      ...p,
+      recruitedOverride: {
+        ...p.recruitedOverride,
+        ...Object.fromEntries(RETAINERS.filter((r) => (r.recruitPriority ?? 0) >= 4).map((r) => [r.name, true])),
+      },
+    }));
 
   const allEntries = rosterEntries(plan);
   const recruitedCount = allEntries.filter((r) => isRecruited(r.name, plan)).length;
@@ -175,6 +183,7 @@ export default function LaborTab({
               value={recruitQ}
               onChange={(e) => setRecruitQ(e.target.value)}
             />
+            <button className="btn" onClick={recruitPriority}>Recruit priority 4+</button>
             <button className="btn" onClick={recruitAll}>Recruit all</button>
             <button className="btn" onClick={clearAll}>Clear all</button>
             <button className="btn" onClick={resetRoster}>Reset to sheet</button>

@@ -9,20 +9,15 @@ is best for each job.
 
 ## Features
 
-- **Production & Revenue** — add craft lines (dishes, wines, kiln items), choose retainer level,
-  slots, sell channel (Merchant/Restaurant) and best-seller. Auto-computes output/hr, price,
-  revenue/hr and profit/hr, with plan-wide totals.
-- **Best Sellers / Recommendations** — ranks every priced product by profit/hr at a chosen level
-  and channel, flags the top earners, and adds the winners straight to your plan in one click.
-- **Materials sync** — aggregates every ingredient drawn by production, minus what your farms and
-  gathering slots produce. Shows net/hr, current stock, **runway (hours to stockout)** and a
-  status flag so you can rebalance before you run dry.
-- **Touchstone orders** — track this week's orders and required quantities; rolls them up into a
-  combined requirement with shortfall, time-to-fill from current production and a solo estimate.
-- **Labor** — ranks the best retainer for each job (Cook, Catering, Kilnwork, Brewing, Fishing,
-  Hunting, Mining, Forestry) and shows how many slots each job is being asked to run.
-- **Save & share** — everything is stored in your browser; export/import the whole plan as JSON.
-
+- **Dashboard** - one-glance weekly profit, industry slot use, Restaurant serving cap, skill-slot capacity, order shortfalls and material risks.
+- **Production & Revenue** - add craft lines (dishes, wines, kiln items), assign real recruited retainers, mark best-sellers and see output/hr, Inn price, Trade price and profit.
+- **Sell & Trade** - tracks finished goods accumulated since the last sold reset and estimates manual Trade-for-Profit value.
+- **Best Sellers / Recommendations** - ranks priced products for your actual roster and adds a staffed line to the plan in one click.
+- **Optimizer** - greedy planner that reserves short orders first, respects industry/skill slots, uses recruited retainers once each and avoids picks that push ingredients below the runway target when possible.
+- **Materials sync** - aggregates ingredient draw versus farms/gathering/crafted intermediates. Shows net/hr, stock, runway and stockout risk, with bulk paste for inventory lines.
+- **Touchstone orders** - track weekly orders manually or by pasting item/quantity lines; requirements roll up against stock and production.
+- **Roster** - mark recruited retainers, edit skill levels, add custom retainers, and quick-recruit high-priority NPCs from the Retainer Guide.
+- **Save & share** - everything is stored in your browser; export/import the whole plan as JSON.
 ## Data
 
 Game constants (recipes, prices, crop yields, retainer skills, production rates, best-seller bonus)

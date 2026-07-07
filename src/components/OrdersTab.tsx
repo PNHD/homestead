@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { PlanState, Order, OrderReq } from "../types";
 import { uid } from "../utils/storage";
-import { computeOrderRequirements, orderableItems, fmt } from "../utils/calc";
+import { computeOrderRequirements, orderableItems, parseItemQtyLines, fmt } from "../utils/calc";
 import { NumberInput, Combobox, SectionTitle } from "./Ui";
 
 const ITEM_OPTIONS = orderableItems().map((n) => ({ value: n, label: n }));
@@ -15,6 +15,7 @@ export default function OrdersTab({
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
   const reqs = useMemo(() => computeOrderRequirements(plan), [plan]);
+  const [bulkOrder, setBulkOrder] = useState("");
 
   const addOrder = () =>
     setPlan((p) => ({
@@ -24,6 +25,18 @@ export default function OrdersTab({
         { id: uid(), name: `Order ${p.orders.length + 1}`, reqs: [EMPTY_REQ()], done: false },
       ],
     }));
+  const importOrder = () => {
+    const rows = parseItemQtyLines(bulkOrder, ITEM_OPTIONS.map((o) => o.value));
+    if (rows.length === 0) return;
+    setPlan((p) => ({
+      ...p,
+      orders: [
+        ...p.orders,
+        { id: uid(), name: `Order ${p.orders.length + 1}`, reqs: rows, done: false },
+      ],
+    }));
+    setBulkOrder("");
+  };
   const updOrder = (id: string, patch: Partial<Order>) =>
     setPlan((p) => ({ ...p, orders: p.orders.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
   const rmOrder = (id: string) =>
@@ -58,6 +71,18 @@ export default function OrdersTab({
         </SectionTitle>
         <button className="btn btn-gold" onClick={addOrder}>
           + Add order
+        </button>
+      </div>
+
+      <div className="card flex flex-wrap items-end gap-2 p-3">
+        <textarea
+          className="input min-h-20 flex-1"
+          value={bulkOrder}
+          onChange={(e) => setBulkOrder(e.target.value)}
+          placeholder={"Paste one order, one item per line: Celadon Ewer 25"}
+        />
+        <button className="btn btn-gold" onClick={importOrder} disabled={!bulkOrder.trim()}>
+          Import order lines
         </button>
       </div>
 

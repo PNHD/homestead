@@ -732,6 +732,22 @@ export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
   return out.sort((a, b) => b.tradeValue - a.tradeValue);
 }
 
+// ---- paste helpers -------------------------------------------------------
+export function parseItemQtyLines(text: string, validItems: string[]): { item: string; qty: number }[] {
+  const byLower = Object.fromEntries(validItems.map((n) => [n.toLowerCase(), n]));
+  const out: { item: string; qty: number }[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const tail = line.match(/^(.+?)[,;:\t ]+(\d+(?:\.\d+)?)$/);
+    const head = line.match(/^(\d+(?:\.\d+)?)[,;:\t ]+(.+)$/);
+    const name = (tail?.[1] ?? head?.[2] ?? "").trim();
+    const qty = Number(tail?.[2] ?? head?.[1] ?? 0);
+    const item = byLower[name.toLowerCase()];
+    if (item && qty > 0) out.push({ item, qty });
+  }
+  return out;
+}
 // ---- helpers -------------------------------------------------------------
 let _uid = 0;
 function uidLocal(): string {
