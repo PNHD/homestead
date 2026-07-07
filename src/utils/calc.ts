@@ -748,6 +748,136 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
   const summary = computeSummary(probe, computeMaterialFlows(probe));
   return { lines, serveLines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
 }
+// ---- weekly plan (the capital-circulation loop) --------------------------
+export interface WeeklyProductionRow {
+  industry: string;
+  productName: string;
+  retainer: string;
+  outPerHr: number;
+  isOrderFiller: boolean; // reserved to clear a touchstone order
+}
+export interface WeeklyCateringRow {
+  productName: string;
+  retainer: string;
+  servedPerHr: number;
+  innPrice: number;
+  incomePerHr: number;
+}
+export interface WeeklyGrowRow {
+  crop: string;
+  netPerHr: number;
+  runwayH: number;
+  fieldsToAdd: number; // full fields (16 plots) needed to break even
+}
+export interface WeeklyGatherRow {
+  job: Job;
+  material: string;
+  netPerHr: number;
+  runwayH: number;
+  retainer: string; // best recruited gatherer for the job ("" = none)
+}
+export interface WeeklyPlan {
+  production: WeeklyProductionRow[];
+  catering: WeeklyCateringRow[];
+  farming: WeeklyGrowRow[];
+  gathering: WeeklyGatherRow[];
+  orders: OrderItemReq[]; // still-short items
+  profitPerHr: number;
+  profitPerWeek: number;
+  lines: CraftLine[]; // for Apply
+  serveLines: ServeLine[];
+  notes: string[];
+}
+
+const GATHER_JOBS: Job[] = ["Fishing", "Hunting", "Mining", "Forestry"];
+
+/**
+ * Assemble the whole weekly loop: let the optimizer staff production + catering,
+ * then read the resulting material flows to say what to farm and gather to feed it.
+ * Everything respects homestead level, the player's slots, and their recruited roster.
+ */
+export function buildWeeklyPlan(plan: PlanState, opts: OptimizeOptions): WeeklyPlan {
+  const opt = optimizePlan(plan, opts);
+  const probe: PlanState = { ...plan, craftLines: opt.lines, serveLines: opt.serveLines };
+  const flows = computeMaterialFlows(probe);
+
+  // order items that got a reserved production slot (so we can label kiln fillers etc.)
+  const orderShortNames = new Set(
+    computeOrderRequirements(plan).filter((r) => r.shortfall > 0).map((r) => r.item)
+  );
+
+  const production: WeeklyProductionRow[] = opt.lines.map((l) => {
+    const c = calcCraftLine(l, probe);
+    return {
+      industry: c.product?.industry ?? "—",
+      productName: l.productName,
+      retainer: l.retainer,
+      outPerHr: c.outPerHr,
+      isOrderFiller: orderShortNames.has(l.productName),
+    };
+  });
+
+  const catering: WeeklyCateringRow[] = opt.serveLines.map((l) => {
+    const s = calcServeLine(l, probe);
+    return {
+      productName: l.productName,
+      retainer: l.retainer,
+      servedPerHr: s.servedPerHr,
+      innPrice: s.innPrice,
+      incomePerHr: s.incomePerHr,
+    };
+  });
+
+  // Farming: crops the plan drains that you are not growing enough of.
+  const farming: WeeklyGrowRow[] = flows
+    .filter((f) => CROP_BY_NAME[f.name] && f.netPerHr < -1e-6)
+    .map((f) => {
+      const crop = CROP_BY_NAME[f.name];
+      const perField = crop.yieldPerHrFarm || 0;
+      return {
+        crop: f.name,
+        netPerHr: f.netPerHr,
+        runwayH: f.runwayH,
+        fieldsToAdd: perField > 0 ? Math.ceil(-f.netPerHr / perField) : 0,
+      };
+    })
+    .sort((a, b) => a.runwayH - b.runwayH);
+
+  // Gathering: raw specialties the plan drains, with the best gatherer you own.
+  const gathering: WeeklyGatherRow[] = flows
+    .filter((f) => {
+      const job = MATERIALS[f.name]?.job as Job | undefined;
+      return !!job && GATHER_JOBS.includes(job) && f.netPerHr < -1e-6;
+    })
+    .map((f) => {
+      const job = MATERIALS[f.name]!.job as Job;
+      return {
+        job,
+        material: f.name,
+        netPerHr: f.netPerHr,
+        runwayH: f.runwayH,
+        retainer: recruitedRetainersFor(job, plan)[0]?.name ?? "",
+      };
+    })
+    .sort((a, b) => a.runwayH - b.runwayH);
+
+  const orders = computeOrderRequirements(probe).filter((r) => r.shortfall > 0);
+  const summary = computeSummary(probe, flows);
+
+  return {
+    production,
+    catering,
+    farming,
+    gathering,
+    orders,
+    profitPerHr: summary.profitPerHr,
+    profitPerWeek: summary.profitPerWeek,
+    lines: opt.lines,
+    serveLines: opt.serveLines,
+    notes: opt.notes,
+  };
+}
+
 // ---- trade tracker -------------------------------------------------------
 export interface ProducedItem {
   name: string;

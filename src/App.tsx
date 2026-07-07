@@ -4,6 +4,7 @@ import { loadPlan, savePlan } from "./utils/storage";
 import { computeMaterialFlows, computeSummary, fmtMoney } from "./utils/calc";
 import { StatCard } from "./components/Ui";
 import DashboardTab from "./components/DashboardTab";
+import WeeklyPlanTab from "./components/WeeklyPlanTab";
 import ProductionTab from "./components/ProductionTab";
 import SellTab from "./components/SellTab";
 import MaterialsTab from "./components/MaterialsTab";
@@ -15,6 +16,7 @@ import DataTab from "./components/DataTab";
 
 type TabId =
   | "dashboard"
+  | "weekly"
   | "production"
   | "sell"
   | "recommend"
@@ -25,6 +27,7 @@ type TabId =
   | "data";
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "📊" },
+  { id: "weekly", label: "Weekly Plan", icon: "🗓️" },
   { id: "production", label: "Production & Revenue", icon: "🍜" },
   { id: "sell", label: "Sell & Trade", icon: "💰" },
   { id: "recommend", label: "Best Sellers", icon: "⭐" },
@@ -120,6 +123,7 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6">
         {tab === "dashboard" && <DashboardTab plan={plan} goto={(t) => setTab(t as TabId)} />}
+        {tab === "weekly" && <WeeklyPlanTab plan={plan} setPlan={setPlan} />}
         {tab === "production" && <ProductionTab plan={plan} setPlan={setPlan} />}
         {tab === "sell" && <SellTab plan={plan} setPlan={setPlan} />}
         {tab === "recommend" && <RecommendTab plan={plan} setPlan={setPlan} />}
