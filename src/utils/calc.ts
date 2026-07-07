@@ -66,9 +66,13 @@ export function efficiency(level: number, job?: Job | string): Eff {
   return { mult: mystic ? EFF_MULT_UNKNOWN : EFF_L6_NO_MYSTIC, estimated: true };
 }
 
+/** Base output/hr for a job — user's rate override (to match building level) wins over the sheet. */
+export function baseRate(job: Job | string, plan?: PlanState): number {
+  return plan?.rateOverrides?.[job as Job] ?? BASE_RATES[job] ?? 1;
+}
+
 /** Items produced per hour by one retainer at a job & skill level. */
-export function outputPerHr(job: Job | string, level: number): number {
-  const base = BASE_RATES[job] ?? 1;
+export function outputPerHr(job: Job | string, level: number, base = BASE_RATES[job] ?? 1): number {
   return base * efficiency(level, job).mult;
 }
 
@@ -110,7 +114,7 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const product = PRODUCT_BY_NAME[line.productName];
   const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
   const active = !!product && level > 0;
-  const outPerHr = active ? outputPerHr(product!.job, level) : 0;
+  const outPerHr = active ? outputPerHr(product!.job, level, baseRate(product!.job, plan)) : 0;
   const inn = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
   const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
@@ -163,7 +167,7 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     if (!mat || !mat.job) continue;
     const level = retainerJobLevel(g.retainer, mat.job, plan.retainerLevels);
     if (level <= 0) continue;
-    touch(produced, g.materialName, outputPerHr(mat.job, level));
+    touch(produced, g.materialName, outputPerHr(mat.job, level, baseRate(mat.job, plan)));
   }
   // farms produce crops
   for (const f of plan.farmLines) {
@@ -230,7 +234,7 @@ export function calcServeLine(line: ServeLine, plan: PlanState): ServeLineCalc {
   const validProduct = !!product && (product.type === "Dish" || product.type === "Wine");
   const level = validProduct ? retainerJobLevel(line.retainer, "Catering", plan.retainerLevels) : 0;
   const active = validProduct && level > 0;
-  const servedPerHr = active ? outputPerHr("Catering", level) : 0;
+  const servedPerHr = active ? outputPerHr("Catering", level, baseRate("Catering", plan)) : 0;
   const price = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
   return {
     line,
@@ -553,7 +557,7 @@ export function rankProductsForRoster(plan: PlanState, bestSeller: boolean): Ros
     const best = recruitedRetainersFor(p.job, plan)[0];
     const level = best?.level ?? 0;
     const useLevel = level > 0 ? level : 4;
-    const outPerHr = outputPerHr(p.job, useLevel);
+    const outPerHr = outputPerHr(p.job, useLevel, baseRate(p.job, plan));
     const price = innPrice(p, bestSeller, ov);
     const revenuePerHr = outPerHr * price;
     const inputCostPerHr = outPerHr * (p.inputCost ?? 0);

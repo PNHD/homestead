@@ -4,6 +4,7 @@ import type { PlanState } from "../types";
 import {
   recruitedRetainersFor,
   outputPerHr,
+  baseRate,
   retainerJobLevel,
   isRecruited,
   rosterEntries,
@@ -127,7 +128,7 @@ export default function LaborTab({
                           {r.confidant && <span className="text-gold"> ★</span>}
                         </span>
                         <span className="tabular-nums text-gray-400">
-                          L{r.level} · {outputPerHr(job, r.level).toFixed(2)}/hr
+                          L{r.level} · {outputPerHr(job, r.level, baseRate(job, plan)).toFixed(2)}/hr
                         </span>
                       </li>
                     ))}

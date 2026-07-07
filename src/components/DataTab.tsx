@@ -2,10 +2,11 @@ import { useMemo, useRef, useState } from "react";
 import type { PlanState, PriceOverride } from "../types";
 import { emptyPlan, slotsForLevel } from "../types";
 import { exportPlan, importPlan } from "../utils/storage";
-import { PRODUCTS, MATERIALS, RETAINERS, CROPS, type Job } from "../data/gameData";
+import { PRODUCTS, MATERIALS, RETAINERS, CROPS, BASE_RATES, type Job } from "../data/gameData";
 import { NumberInput, SectionTitle } from "./Ui";
 
 const SKILL_JOBS: Job[] = ["Cook", "Catering", "Kilnwork", "Brewing", "Fishing", "Hunting", "Mining", "Forestry"];
+const sheetRate = (job: Job) => BASE_RATES[job] ?? 1;
 
 const INDUSTRY_SLOTS: { key: string; label: string }[] = [
   { key: "Inn", label: "Kitchen (cook)" },
@@ -57,6 +58,13 @@ export default function DataTab({
     setPlan((p) => ({ ...p, industrySlots: { ...p.industrySlots, [ind]: n } }));
   const setSkillSlot = (job: Job, n: number) =>
     setPlan((p) => ({ ...p, skillSlots: { ...p.skillSlots, [job]: n } }));
+  const setRate = (job: Job, n: number) =>
+    setPlan((p) => {
+      const next = { ...p.rateOverrides };
+      if (!n || n === sheetRate(job)) delete next[job];
+      else next[job] = n;
+      return { ...p, rateOverrides: next };
+    });
   const setOverride = (name: string, patch: PriceOverride) =>
     setPlan((p) => {
       const cur = p.priceOverrides[name] ?? {};
@@ -171,6 +179,33 @@ export default function DataTab({
               />
             </label>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <SectionTitle hint="Base output per hour for a level-1 worker. Raise these to match your building level (e.g. a Lv7 brewery brews far faster than the Lv6 sheet value). Output = base × skill efficiency.">
+          Production rates (per hour)
+        </SectionTitle>
+        <div className="card flex flex-wrap items-center gap-x-5 gap-y-3 p-4">
+          {SKILL_JOBS.map((job) => {
+            const overridden = plan.rateOverrides?.[job] != null;
+            return (
+              <label key={job} className="flex items-center gap-2 text-sm text-gray-300">
+                {job}
+                <NumberInput
+                  value={plan.rateOverrides?.[job] ?? sheetRate(job)}
+                  min={0}
+                  step={0.1}
+                  onChange={(n) => setRate(job, n)}
+                  className={`w-20 ${overridden ? "border-gold/50" : ""}`}
+                />
+              </label>
+            );
+          })}
+          <span className="text-xs text-gray-500">
+            Sheet defaults: Cook/Cater/Brew 1, Kiln 4, gather 5. Gold border = your override. Brewery with
+            "2 per still" — set the per-worker rate so all slots sum to your in-game output.
+          </span>
         </div>
       </div>
 

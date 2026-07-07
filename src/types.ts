@@ -82,6 +82,8 @@ export interface PlanState {
   recruitedOverride: Record<string, boolean>;
   /** how many retainers you can staff per skill (Retainer Plan) */
   skillSlots: Partial<Record<Job, number>>;
+  /** per-job base output/hr override (level-1 rate) to match your building level; empty = sheet defaults */
+  rateOverrides: Partial<Record<Job, number>>;
   /** epoch ms since which production has been accumulating (Trade tracker) */
   trackingSince: number;
   /** per-product epoch ms of the last "sold" reset (Trade tracker) */
@@ -131,6 +133,7 @@ export const emptyPlan = (): PlanState => ({
   retainerLevels: {},
   recruitedOverride: {},
   skillSlots: { ...DEFAULT_SKILL_SLOTS },
+  rateOverrides: {},
   trackingSince: Date.now(),
   soldAt: {},
 });
