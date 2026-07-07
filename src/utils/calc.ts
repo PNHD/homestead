@@ -644,15 +644,9 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
     }
   }
 
-  let revenuePerHr = 0;
-  let profitPerHr = 0;
   const probe: PlanState = { ...plan, craftLines: lines };
-  for (const line of lines) {
-    const c = calcCraftLine(line, probe);
-    revenuePerHr += c.revenuePerHr;
-    profitPerHr += c.profitPerHr;
-  }
-  return { lines, revenuePerHr, profitPerHr, notes };
+  const summary = computeSummary(probe, computeMaterialFlows(probe));
+  return { lines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
 }
 
 // ---- trade tracker -------------------------------------------------------
