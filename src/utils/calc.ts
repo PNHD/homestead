@@ -665,7 +665,7 @@ function bestProductForIndustry(
 function buildServeLines(
   plan: PlanState,
   craftLines: CraftLine[],
-  used: Set<string>,
+  caterers: string[],
   bestSeller: boolean,
   notes: string[]
 ): ServeLine[] {
@@ -678,22 +678,21 @@ function buildServeLines(
   const candidates = [...produced]
     .map((name) => PRODUCT_BY_NAME[name])
     .sort((a, b) => innPrice(b, bestSeller, activeOverrides(plan)) - innPrice(a, bestSeller, activeOverrides(plan)));
-  const slots = Math.min(plan.industrySlots.Restaurant ?? 0, plan.skillSlots.Catering ?? plan.industrySlots.Restaurant ?? 0);
+  if (candidates.length === 0) return [];
+  if (caterers.length === 0) {
+    notes.push("No recruited Catering retainer — dishes/wine can't earn Inn income (catering is the only revenue).");
+    return [];
+  }
   const serveLines: ServeLine[] = [];
-  for (let i = 0; i < slots && candidates.length > 0; i++) {
-    const retainer = nextRetainer("Catering", used, plan);
-    if (!retainer) {
-      notes.push("Restaurant slot left empty - no more recruited Catering retainers.");
-      break;
-    }
-    used.add(retainer);
-    serveLines.push({ id: uidLocal(), productName: candidates[i % candidates.length].name, retainer, bestSeller });
+  for (let i = 0; i < caterers.length && candidates.length > 0; i++) {
+    serveLines.push({ id: uidLocal(), productName: candidates[i % candidates.length].name, retainer: caterers[i], bestSeller });
   }
   return serveLines;
 }
 /**
- * Greedy planner: orders first if requested, then each industry's best remaining
- * material-safe earner, staffed by the player's recruited retainers once each.
+ * Greedy planner: catering is the only revenue, so reserve caterers first; then
+ * orders, then each industry's best remaining material-safe earner, staffed by
+ * the player's recruited retainers once each.
  */
 export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeResult {
   const used = new Set<string>();
@@ -701,6 +700,32 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
     if (name) used.add(name);
     return name;
   };
+
+  // Reserve caterers up front — a dish/wine only earns money when a caterer sells it,
+  // so production must not poach the retainers catering needs. Cap by how many
+  // caterable goods can actually be produced (Inn cooks dishes, Brewery brews wine).
+  const caterCap = Math.min(
+    plan.industrySlots.Restaurant ?? 0,
+    plan.skillSlots.Catering ?? plan.industrySlots.Restaurant ?? 0,
+    (plan.industrySlots.Inn ?? 0) + (plan.industrySlots.Brewery ?? 0)
+  );
+  // ponytail: greedy reservation with one guard — never reserve the last retainer who
+  // could produce a caterable good, or you'd cater nothing. A real solver would co-assign.
+  const needsProducers = (plan.industrySlots.Inn ?? 0) + (plan.industrySlots.Brewery ?? 0) > 0;
+  const producerPool = new Set(
+    rosterEntries(plan)
+      .filter((r) => isRecruited(r.name, plan))
+      .filter((r) => retainerJobLevel(r.name, "Cook", plan.retainerLevels) > 0 || retainerJobLevel(r.name, "Brewing", plan.retainerLevels) > 0)
+      .map((r) => r.name)
+  );
+  const reservedCaterers: string[] = [];
+  for (const r of recruitedRetainersFor("Catering", plan)) {
+    if (reservedCaterers.length >= caterCap) break;
+    const wouldStrandProduction =
+      needsProducers && producerPool.has(r.name) && [...producerPool].every((n) => n === r.name || used.has(n) || reservedCaterers.includes(n));
+    if (wouldStrandProduction) continue; // keep this one free to produce
+    reservedCaterers.push(claim(r.name));
+  }
 
   const shortByIndustry: Record<string, string[]> = {};
   if (opts.ordersFirst) {
@@ -748,7 +773,7 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
     }
   }
 
-  const serveLines = buildServeLines(plan, lines, used, opts.bestSeller, notes);
+  const serveLines = buildServeLines(plan, lines, reservedCaterers, opts.bestSeller, notes);
   const probe: PlanState = { ...plan, craftLines: lines, serveLines };
   const summary = computeSummary(probe, computeMaterialFlows(probe));
   return { lines, serveLines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
