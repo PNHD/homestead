@@ -559,6 +559,7 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
 export interface OptimizeOptions {
   bestSeller: boolean;
   ordersFirst: boolean; // reserve a slot per short, craftable order item
+  materialSafe?: boolean; // avoid picks that push ingredients below the runway target
 }
 export interface OptimizeResult {
   lines: CraftLine[];
@@ -567,38 +568,75 @@ export interface OptimizeResult {
   notes: string[];
 }
 
-/** Highest profit-per-unit priced product in an industry (output rate is equal within a job). */
-function bestProductForIndustry(ind: string, bestSeller: boolean, overrides: PriceOverrides): Product | undefined {
-  let best: Product | undefined;
-  let bestMargin = -Infinity;
+interface OptimizeCandidate {
+  product: Product;
+  retainer: string;
+  profitPerHr: number;
+  revenuePerHr: number;
+  badIngredients: string[];
+  score: number;
+}
+
+function nextRetainer(job: Job, used: Set<string>, plan: PlanState): string {
+  return recruitedRetainersFor(job, plan).find((r) => !used.has(r.name))?.name ?? "";
+}
+
+function badIngredientsFor(p: Product, flows: MaterialFlow[]): string[] {
+  const byName = Object.fromEntries(flows.map((f) => [f.name, f]));
+  return p.ingredients
+    .map((ing) => byName[ing.name])
+    .filter((f): f is MaterialFlow => !!f && f.status === "stockout")
+    .map((f) => f.name);
+}
+
+function bestProductForIndustry(
+  ind: string,
+  plan: PlanState,
+  opts: OptimizeOptions,
+  lines: CraftLine[],
+  used: Set<string>
+): OptimizeCandidate | undefined {
+  const basePlan: PlanState = { ...plan, craftLines: lines };
+  const base = computeSummary(basePlan, computeMaterialFlows(basePlan));
+  const materialSafe = opts.materialSafe !== false;
+  const candidates: OptimizeCandidate[] = [];
+
   for (const p of PRODUCTS) {
     if (p.industry !== ind) continue;
-    const price = innPrice(p, bestSeller, overrides);
-    if (price <= 0) continue;
-    const margin = price - (p.inputCost ?? 0);
-    if (margin > bestMargin) {
-      bestMargin = margin;
-      best = p;
-    }
+    if (innPrice(p, opts.bestSeller, activeOverrides(plan)) <= 0) continue;
+    const retainer = nextRetainer(p.job, used, plan);
+    if (!retainer) continue;
+    const line: CraftLine = { id: "probe", productName: p.name, retainer, bestSeller: opts.bestSeller };
+    const probe: PlanState = { ...plan, craftLines: [...lines, line] };
+    const flows = computeMaterialFlows(probe);
+    const summary = computeSummary(probe, flows);
+    const badIngredients = materialSafe ? badIngredientsFor(p, flows) : [];
+    const gain = summary.profitPerHr - base.profitPerHr;
+    candidates.push({
+      product: p,
+      retainer,
+      profitPerHr: summary.profitPerHr,
+      revenuePerHr: summary.revenuePerHr,
+      badIngredients,
+      // ponytail: greedy score; replace with linear programming if slot/material constraints get complex.
+      score: gain - badIngredients.length * 1_000_000,
+    });
   }
-  return best;
+
+  return candidates.sort(
+    (a, b) => b.score - a.score || b.profitPerHr - a.profitPerHr || b.revenuePerHr - a.revenuePerHr
+  )[0];
 }
 
 /**
- * Assign each industry's slots to its best product, staffed by your highest-level
- * available retainers (each retainer used once). Optionally reserve a slot for
- * every short, craftable order item first.
+ * Greedy planner: orders first if requested, then each industry's best remaining
+ * material-safe earner, staffed by the player's recruited retainers once each.
  */
 export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeResult {
   const used = new Set<string>();
-  const claim = (job: Job): string => {
-    for (const r of recruitedRetainersFor(job, plan)) {
-      if (!used.has(r.name)) {
-        used.add(r.name);
-        return r.name;
-      }
-    }
-    return "";
+  const claim = (name: string): string => {
+    if (name) used.add(name);
+    return name;
   };
 
   const shortByIndustry: Record<string, string[]> = {};
@@ -623,24 +661,27 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
 
     for (const name of shortByIndustry[ind] ?? []) {
       if (cap <= 0) break;
-      const ret = claim(PRODUCT_BY_NAME[name].job);
-      if (!ret) {
+      const retainer = nextRetainer(PRODUCT_BY_NAME[name].job, used, plan);
+      if (!retainer) {
         notes.push(`Not enough ${ind} retainers to staff the order for ${name}.`);
         continue;
       }
-      lines.push({ id: uidLocal(), productName: name, retainer: ret, bestSeller: opts.bestSeller });
+      claim(retainer);
+      lines.push({ id: uidLocal(), productName: name, retainer, bestSeller: opts.bestSeller });
       cap -= 1;
     }
 
-    const best = bestProductForIndustry(ind, opts.bestSeller, activeOverrides(plan));
-    if (!best) {
-      notes.push(`No priced product for ${ind} — left empty.`);
-      continue;
-    }
     for (let i = 0; i < cap; i++) {
-      const ret = claim(best.job);
-      lines.push({ id: uidLocal(), productName: best.name, retainer: ret, bestSeller: opts.bestSeller });
-      if (!ret) notes.push(`${ind} slot left unstaffed — no more retainers with ${best.job}.`);
+      const best = bestProductForIndustry(ind, plan, opts, lines, used);
+      if (!best) {
+        notes.push(`${ind} slot left empty - no recruited ${INDUSTRY_JOB[ind]} retainer or priced product.`);
+        break;
+      }
+      claim(best.retainer);
+      lines.push({ id: uidLocal(), productName: best.product.name, retainer: best.retainer, bestSeller: opts.bestSeller });
+      if (best.badIngredients.length > 0) {
+        notes.push(`${best.product.name}: below runway for ${best.badIngredients.join(", ")}.`);
+      }
     }
   }
 
@@ -648,7 +689,6 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
   const summary = computeSummary(probe, computeMaterialFlows(probe));
   return { lines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
 }
-
 // ---- trade tracker -------------------------------------------------------
 export interface ProducedItem {
   name: string;

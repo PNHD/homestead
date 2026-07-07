@@ -18,10 +18,11 @@ export default function OptimizerTab({
 }) {
   const [bestSeller, setBestSeller] = useState(false);
   const [ordersFirst, setOrdersFirst] = useState(true);
+  const [materialSafe, setMaterialSafe] = useState(true);
 
   const result = useMemo(
-    () => optimizePlan(plan, { bestSeller, ordersFirst }),
-    [plan, bestSeller, ordersFirst]
+    () => optimizePlan(plan, { bestSeller, ordersFirst, materialSafe }),
+    [plan, bestSeller, ordersFirst, materialSafe]
   );
 
   const current = useMemo(() => {
@@ -42,7 +43,7 @@ export default function OptimizerTab({
 
   return (
     <div className="space-y-5">
-      <SectionTitle hint="Greedy allocation: fill each industry's slots with its best earner (optionally reserve slots for short orders).">
+      <SectionTitle hint="Greedy allocation: reserve short orders, then pick the best staffed product that does not push ingredients below runway when possible.">
         Optimizer
       </SectionTitle>
 
@@ -65,6 +66,10 @@ export default function OptimizerTab({
         <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
           <input type="checkbox" className="h-4 w-4 accent-[#5bbf9a]" checked={ordersFirst} onChange={(e) => setOrdersFirst(e.target.checked)} />
           Orders first
+        </label>
+        <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
+          <input type="checkbox" className="h-4 w-4 accent-[#5bbf9a]" checked={materialSafe} onChange={(e) => setMaterialSafe(e.target.checked)} />
+          Protect runway
         </label>
       </div>
 
