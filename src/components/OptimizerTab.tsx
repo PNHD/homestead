@@ -37,6 +37,7 @@ export default function OptimizerTab({
     setPlan((p) => ({
       ...p,
       craftLines: result.lines.map((l) => ({ ...l })),
+      serveLines: result.serveLines.map((l) => ({ ...l })),
     }));
 
   const delta = result.profitPerHr - current.profitPerHr;
@@ -131,10 +132,10 @@ export default function OptimizerTab({
 
       <div className="flex items-center gap-3">
         <button className="btn btn-gold" onClick={apply} disabled={result.lines.length === 0}>
-          Apply to plan (replaces production lines)
+          Apply to plan (replaces production + catering)
         </button>
         <span className="text-xs text-gray-500">
-          This overwrites your current {plan.craftLines.length} production line(s) with the suggestion.
+          This overwrites your current {plan.craftLines.length} production and {(plan.serveLines ?? []).length} catering line(s).
         </span>
       </div>
     </div>

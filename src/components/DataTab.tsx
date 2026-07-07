@@ -136,18 +136,9 @@ export default function DataTab({
           ))}
         </div>
         <p className="mt-1 text-xs text-gray-500">
-          Kitchen cooks dishes → Restaurant serves them for Inn income. Local Specialties =
+          Kitchen cooks dishes; Restaurant/Catering serves finished dishes and wine for Inn income. Local Specialties =
           fishing/hunting/mining/forestry gather slots.
         </p>
-        <label className="mt-2 flex items-center gap-2 text-sm text-gray-300">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-[#5bbf9a]"
-            checked={plan.serveModelEnabled !== false}
-            onChange={(e) => setPlan((p) => ({ ...p, serveModelEnabled: e.target.checked }))}
-          />
-          Model Restaurant serving (cap Inn income by catering throughput)
-        </label>
       </div>
 
       <div>

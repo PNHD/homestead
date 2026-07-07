@@ -20,7 +20,7 @@ import {
   type Product,
   type Job,
 } from "../data/gameData";
-import type { CraftLine, PlanState } from "../types";
+import type { CraftLine, ServeLine, PlanState } from "../types";
 
 // ---- lookups -------------------------------------------------------------
 export const PRODUCT_BY_NAME: Record<string, Product> = Object.fromEntries(
@@ -89,9 +89,9 @@ export interface CraftLineCalc {
   outPerHr: number; // finished items / hr (one slot)
   innPrice: number; // auto sale price
   tradePrice: number; // manual sale price
-  revenuePerHr: number; // Inn auto income / hr
+  revenuePerHr: number; // potential Inn income / hr if this output is catered
   inputCostPerHr: number;
-  profitPerHr: number; // Inn income - input cost
+  profitPerHr: number; // potential Inn income - input cost
   estimated: boolean;
   active: boolean; // has a retainer who can make it
 }
@@ -161,6 +161,8 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     if (!crop) continue;
     touch(produced, f.cropName, (crop.yieldPerHrFarm ?? 0) * Math.max(0, f.farms));
   }
+  // restaurant catering consumes finished dishes/wine and is the only Inn income source.
+  for (const item of computeServe(plan).items) touch(needed, item.name, item.servedPerHr);
 
   // include any item the user tracks stock for, even if not flowing
   const names = new Set([...Object.keys(needed), ...Object.keys(produced), ...Object.keys(plan.inventory)]);
@@ -184,81 +186,109 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
   return flows.sort((a, b) => a.runwayH - b.runwayH || b.neededPerHr - a.neededPerHr);
 }
 
-// ---- restaurant serving (the cook -> serve pipeline) ---------------------
+// ---- restaurant serving (finished goods -> Inn income) -------------------
+export interface ServeLineCalc {
+  line: ServeLine;
+  product?: Product;
+  level: number;
+  servedPerHr: number;
+  innPrice: number;
+  incomePerHr: number;
+  estimated: boolean;
+  active: boolean;
+}
 export interface ServeItem {
   name: string;
   producedPerHr: number;
   servedPerHr: number;
-  unservedPerHr: number; // piles up as stock (sell via Trade)
+  unservedPerHr: number; // piles up as stock (sell via Trade or save for later catering)
   innPrice: number;
   incomePerHr: number;
 }
 export interface ServeResult {
-  capacityPerHr: number; // catering throughput from your best Restaurant retainers
-  sellablePerHr: number; // total dish + wine produced
+  capacityPerHr: number; // active catering throughput from explicit Restaurant rows
+  sellablePerHr: number; // total dish + wine produced by production rows
   servedPerHr: number;
   innIncomePerHr: number;
-  serveLimited: boolean;
+  serveLimited: boolean; // trying to serve faster than current production, stock will drain
   items: ServeItem[];
+  lines: ServeLineCalc[];
 }
 
-/** Catering throughput: your top Restaurant-slot catering retainers, summed. */
-export function serveCapacityPerHr(plan: PlanState): number {
-  const slots = plan.industrySlots["Restaurant"] ?? 6;
-  const caterers = recruitedRetainersFor("Catering", plan).slice(0, Math.max(0, slots));
-  return caterers.reduce((s, r) => s + outputPerHr("Catering", r.level), 0);
-}
-
-/**
- * Dishes & wine must be served at the Restaurant to earn Inn income. Serving
- * capacity (catering) is shared, so it is allocated to the highest-price items
- * first; anything not served piles up as stock to sell via Trade.
- */
-export function computeServe(plan: PlanState): ServeResult {
-  const ov = activeOverrides(plan);
-  const produced: Record<string, { qty: number; price: number; bs: boolean }> = {};
-  for (const line of plan.craftLines) {
-    const c = calcCraftLine(line, plan);
-    if (!c.product || !c.active) continue;
-    if (c.product.type !== "Dish" && c.product.type !== "Wine") continue; // kiln = trade only
-    const cur = (produced[c.product.name] ??= { qty: 0, price: 0, bs: false });
-    cur.qty += c.outPerHr;
-    cur.bs = cur.bs || line.bestSeller;
-  }
-  for (const name of Object.keys(produced)) {
-    produced[name].price = innPrice(PRODUCT_BY_NAME[name], produced[name].bs, ov);
-  }
-
-  let capacity = serveCapacityPerHr(plan);
-  const sellable = Object.values(produced).reduce((s, p) => s + p.qty, 0);
-  const order = Object.entries(produced).sort((a, b) => b[1].price - a[1].price);
-  const items: ServeItem[] = [];
-  let served = 0;
-  let income = 0;
-  for (const [name, p] of order) {
-    const serve = Math.min(p.qty, capacity);
-    capacity -= serve;
-    served += serve;
-    income += serve * p.price;
-    items.push({
-      name,
-      producedPerHr: p.qty,
-      servedPerHr: serve,
-      unservedPerHr: p.qty - serve,
-      innPrice: p.price,
-      incomePerHr: serve * p.price,
-    });
-  }
+export function calcServeLine(line: ServeLine, plan: PlanState): ServeLineCalc {
+  const product = PRODUCT_BY_NAME[line.productName];
+  const validProduct = !!product && (product.type === "Dish" || product.type === "Wine");
+  const level = validProduct ? retainerJobLevel(line.retainer, "Catering", plan.retainerLevels) : 0;
+  const active = validProduct && level > 0;
+  const servedPerHr = active ? outputPerHr("Catering", level) : 0;
+  const price = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
   return {
-    capacityPerHr: serveCapacityPerHr(plan),
-    sellablePerHr: sellable,
-    servedPerHr: served,
-    innIncomePerHr: income,
-    serveLimited: sellable > served + 1e-6,
-    items: items.sort((a, b) => b.incomePerHr - a.incomePerHr),
+    line,
+    product,
+    level,
+    servedPerHr,
+    innPrice: price,
+    incomePerHr: servedPerHr * price,
+    estimated: level > EFF_MULT_VERIFIED_MAX,
+    active,
   };
 }
 
+/** Dishes & wine only earn Inn income when an explicit Restaurant/Catering row sells them. */
+export function computeServe(plan: PlanState): ServeResult {
+  const produced: Record<string, { qty: number; bs: boolean }> = {};
+  for (const line of plan.craftLines) {
+    const c = calcCraftLine(line, plan);
+    if (!c.product || !c.active) continue;
+    if (c.product.type !== "Dish" && c.product.type !== "Wine") continue;
+    const cur = (produced[c.product.name] ??= { qty: 0, bs: false });
+    cur.qty += c.outPerHr;
+    cur.bs = cur.bs || line.bestSeller;
+  }
+
+  const lineCalcs = (plan.serveLines ?? []).map((line) => calcServeLine(line, plan));
+  const served: Record<string, { qty: number; income: number; price: number }> = {};
+  for (const line of lineCalcs) {
+    if (!line.product || !line.active) continue;
+    const cur = (served[line.product.name] ??= { qty: 0, income: 0, price: line.innPrice });
+    cur.qty += line.servedPerHr;
+    cur.income += line.incomePerHr;
+    cur.price = line.innPrice;
+  }
+
+  const names = new Set([...Object.keys(produced), ...Object.keys(served)]);
+  const items: ServeItem[] = [];
+  let sellable = 0;
+  let servedTotal = 0;
+  let income = 0;
+  for (const name of names) {
+    const p = PRODUCT_BY_NAME[name];
+    const made = produced[name]?.qty ?? 0;
+    const sold = served[name]?.qty ?? 0;
+    const inc = served[name]?.income ?? 0;
+    sellable += made;
+    servedTotal += sold;
+    income += inc;
+    items.push({
+      name,
+      producedPerHr: made,
+      servedPerHr: sold,
+      unservedPerHr: made - sold,
+      innPrice: served[name]?.price ?? innPrice(p, !!produced[name]?.bs, activeOverrides(plan)),
+      incomePerHr: inc,
+    });
+  }
+
+  return {
+    capacityPerHr: servedTotal,
+    sellablePerHr: sellable,
+    servedPerHr: servedTotal,
+    innIncomePerHr: income,
+    serveLimited: servedTotal > sellable + 1e-6,
+    items: items.sort((a, b) => b.incomePerHr - a.incomePerHr),
+    lines: lineCalcs,
+  };
+}
 // ---- skill-slot capacity (Retainer Plan) ---------------------------------
 export interface SkillUsage {
   job: Job;
@@ -272,6 +302,9 @@ export function computeSkillUsage(plan: PlanState): SkillUsage[] {
   for (const line of plan.craftLines) {
     const c = calcCraftLine(line, plan);
     if (c.active && c.product) used[c.product.job] = (used[c.product.job] ?? 0) + 1;
+  }
+  for (const s of plan.serveLines ?? []) {
+    if (retainerJobLevel(s.retainer, "Catering", plan.retainerLevels) > 0) used.Catering = (used.Catering ?? 0) + 1;
   }
   for (const g of plan.gatherLines) {
     const job = MATERIALS[g.materialName]?.job as Job | undefined;
@@ -310,9 +343,8 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
     cost += c.inputCostPerHr;
     craftSlots += 1;
   }
-  // When the serve model is on, only dishes/wine actually served at the
-  // Restaurant earn Inn income (kiln items earn via Trade, tracked separately).
-  const rev = plan.serveModelEnabled === false ? potentialInnRev : computeServe(plan).innIncomePerHr;
+  // Only explicit Restaurant/Catering rows earn Inn income; production rows just create stock.
+  const rev = computeServe(plan).innIncomePerHr;
   const gatherSlots = plan.gatherLines.filter(
     (g) => retainerJobLevel(g.retainer, MATERIALS[g.materialName]?.job as Job, plan.retainerLevels) > 0
   ).length;
@@ -344,27 +376,11 @@ export interface RetainerPick {
 export interface RosterEntry {
   name: string;
   confidant: boolean;
-  custom: boolean;
 }
 
-/** Full roster: sheet retainers plus any the user added (custom win by name). */
-export function rosterEntries(plan: PlanState): RosterEntry[] {
-  const customNames = new Set(plan.customRetainers.map((c) => c.name));
-  const customs: RosterEntry[] = plan.customRetainers.map((c) => ({
-    name: c.name,
-    confidant: !!c.confidant,
-    custom: true,
-  }));
-  const sheet: RosterEntry[] = RETAINERS.filter((r) => !customNames.has(r.name)).map((r) => ({
-    name: r.name,
-    confidant: r.confidant,
-    custom: false,
-  }));
-  return [...customs, ...sheet];
-}
-
-export function isCustomRetainer(name: string, plan: PlanState): boolean {
-  return plan.customRetainers.some((c) => c.name === name);
+/** Full roster from the source sheet only. */
+export function rosterEntries(_plan?: PlanState): RosterEntry[] {
+  return RETAINERS.map((r) => ({ name: r.name, confidant: r.confidant }));
 }
 
 /** Best retainers for a job by effective skill (ignores recruited status). */
@@ -374,15 +390,15 @@ export function bestRetainersFor(job: Job, levels?: RetainerLevels): RetainerPic
     .sort((a, b) => b.level - a.level || (b.confidant ? 1 : 0) - (a.confidant ? 1 : 0));
 }
 
-/** Whether a retainer counts as recruited (user override wins; custom = recruited). */
+/** Whether a sheet retainer counts as recruited (user override wins). */
 export function isRecruited(name: string, plan: PlanState): boolean {
+  if (!RETAINER_BY_NAME[name]) return false;
   const ov = plan.recruitedOverride?.[name];
   if (ov != null) return ov;
-  if (isCustomRetainer(name, plan)) return true;
   return RETAINER_BY_NAME[name]?.recruited ?? false;
 }
 
-/** Recruited retainers (sheet + custom) who can do a job, highest skill first. */
+/** Recruited sheet retainers who can do a job, highest skill first. */
 export function recruitedRetainersFor(job: Job, plan: PlanState): RetainerPick[] {
   return rosterEntries(plan)
     .filter((r) => isRecruited(r.name, plan) && retainerJobLevel(r.name, job, plan.retainerLevels) > 0)
@@ -532,7 +548,8 @@ export interface IndustryStat {
   profitPerHr: number;
 }
 
-const CRAFT_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
+const PRODUCTION_INDUSTRIES = ["Inn", "Kiln", "Brewery"];
+const DASHBOARD_INDUSTRIES = ["Inn", "Restaurant", "Kiln", "Brewery"];
 
 export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
   const used: Record<string, number> = {};
@@ -543,10 +560,16 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
     if (!c.product) continue;
     const ind = c.product.industry;
     if (c.active) used[ind] = (used[ind] ?? 0) + 1;
-    rev[ind] = (rev[ind] ?? 0) + c.revenuePerHr;
-    prof[ind] = (prof[ind] ?? 0) + c.profitPerHr;
+    prof[ind] = (prof[ind] ?? 0) - c.inputCostPerHr;
   }
-  return CRAFT_INDUSTRIES.map((ind) => ({
+  for (const line of plan.serveLines ?? []) {
+    const s = calcServeLine(line, plan);
+    if (!s.product) continue;
+    if (s.active) used.Restaurant = (used.Restaurant ?? 0) + 1;
+    rev.Restaurant = (rev.Restaurant ?? 0) + s.incomePerHr;
+    prof.Restaurant = (prof.Restaurant ?? 0) + s.incomePerHr;
+  }
+  return DASHBOARD_INDUSTRIES.map((ind) => ({
     industry: ind,
     slotsUsed: used[ind] ?? 0,
     slotsCapacity: plan.industrySlots[ind] ?? 0,
@@ -554,7 +577,6 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
     profitPerHr: prof[ind] ?? 0,
   }));
 }
-
 // ---- optimizer -----------------------------------------------------------
 export interface OptimizeOptions {
   bestSeller: boolean;
@@ -563,6 +585,7 @@ export interface OptimizeOptions {
 }
 export interface OptimizeResult {
   lines: CraftLine[];
+  serveLines: ServeLine[];
   revenuePerHr: number;
   profitPerHr: number;
   notes: string[];
@@ -628,6 +651,35 @@ function bestProductForIndustry(
   )[0];
 }
 
+function buildServeLines(
+  plan: PlanState,
+  craftLines: CraftLine[],
+  used: Set<string>,
+  bestSeller: boolean,
+  notes: string[]
+): ServeLine[] {
+  const produced = new Set(
+    craftLines
+      .map((line) => PRODUCT_BY_NAME[line.productName])
+      .filter((p): p is Product => !!p && (p.type === "Dish" || p.type === "Wine"))
+      .map((p) => p.name)
+  );
+  const candidates = [...produced]
+    .map((name) => PRODUCT_BY_NAME[name])
+    .sort((a, b) => innPrice(b, bestSeller, activeOverrides(plan)) - innPrice(a, bestSeller, activeOverrides(plan)));
+  const slots = Math.min(plan.industrySlots.Restaurant ?? 0, plan.skillSlots.Catering ?? plan.industrySlots.Restaurant ?? 0);
+  const serveLines: ServeLine[] = [];
+  for (let i = 0; i < slots && candidates.length > 0; i++) {
+    const retainer = nextRetainer("Catering", used, plan);
+    if (!retainer) {
+      notes.push("Restaurant slot left empty - no more recruited Catering retainers.");
+      break;
+    }
+    used.add(retainer);
+    serveLines.push({ id: uidLocal(), productName: candidates[i % candidates.length].name, retainer, bestSeller });
+  }
+  return serveLines;
+}
 /**
  * Greedy planner: orders first if requested, then each industry's best remaining
  * material-safe earner, staffed by the player's recruited retainers once each.
@@ -652,7 +704,7 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
   const INDUSTRY_JOB: Record<string, Job> = { Inn: "Cook", Kiln: "Kilnwork", Brewery: "Brewing" };
   const lines: CraftLine[] = [];
   const notes: string[] = [];
-  for (const ind of CRAFT_INDUSTRIES) {
+  for (const ind of PRODUCTION_INDUSTRIES) {
     const queues = plan.industrySlots[ind] ?? 0;
     const skillCap = plan.skillSlots[INDUSTRY_JOB[ind]] ?? queues;
     let cap = Math.min(queues, skillCap);
@@ -685,9 +737,10 @@ export function optimizePlan(plan: PlanState, opts: OptimizeOptions): OptimizeRe
     }
   }
 
-  const probe: PlanState = { ...plan, craftLines: lines };
+  const serveLines = buildServeLines(plan, lines, used, opts.bestSeller, notes);
+  const probe: PlanState = { ...plan, craftLines: lines, serveLines };
   const summary = computeSummary(probe, computeMaterialFlows(probe));
-  return { lines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
+  return { lines, serveLines, revenuePerHr: summary.revenuePerHr, profitPerHr: summary.profitPerHr, notes };
 }
 // ---- trade tracker -------------------------------------------------------
 export interface ProducedItem {

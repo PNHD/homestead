@@ -14,6 +14,14 @@ export interface CraftLine {
   bestSeller: boolean; // this week's best-seller (+20%)
 }
 
+/** A restaurant slot: one finished dish/wine sold by one catering retainer. */
+export interface ServeLine {
+  id: string;
+  productName: string;
+  retainer: string; // "" = unassigned
+  bestSeller: boolean;
+}
+
 /** A gathering slot: one raw material collected by one assigned retainer. */
 export interface GatherLine {
   id: string;
@@ -55,6 +63,7 @@ export interface PriceOverride {
 export interface PlanState {
   homesteadLevel: number;
   craftLines: CraftLine[];
+  serveLines: ServeLine[];
   gatherLines: GatherLine[];
   farmLines: FarmLine[];
   orders: Order[];
@@ -71,12 +80,8 @@ export interface PlanState {
   retainerLevels: Record<string, Partial<Record<Job, number>>>;
   /** user's recruited/not overrides keyed by retainer name */
   recruitedOverride: Record<string, boolean>;
-  /** retainers the user adds that are not in the source sheets (skills live in retainerLevels) */
-  customRetainers: { name: string; confidant?: boolean }[];
   /** how many retainers you can staff per skill (Retainer Plan) */
   skillSlots: Partial<Record<Job, number>>;
-  /** model the Restaurant serving stage (Inn income capped by catering capacity) */
-  serveModelEnabled: boolean;
   /** epoch ms since which production has been accumulating (Trade tracker) */
   trackingSince: number;
   /** per-product epoch ms of the last "sold" reset (Trade tracker) */
@@ -108,6 +113,7 @@ export const DEFAULT_SKILL_SLOTS: Partial<Record<Job, number>> = {
 export const emptyPlan = (): PlanState => ({
   homesteadLevel: 6,
   craftLines: [],
+  serveLines: [],
   gatherLines: [],
   farmLines: [],
   orders: [],
@@ -118,9 +124,7 @@ export const emptyPlan = (): PlanState => ({
   manualPricesEnabled: true,
   retainerLevels: {},
   recruitedOverride: {},
-  customRetainers: [],
   skillSlots: { ...DEFAULT_SKILL_SLOTS },
-  serveModelEnabled: true,
   trackingSince: Date.now(),
   soldAt: {},
 });

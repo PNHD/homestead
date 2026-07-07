@@ -108,38 +108,29 @@ export default function DashboardTab({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-100">Restaurant serving</h3>
-            {plan.serveModelEnabled === false ? (
-              <span className="chip bg-gray-500/15 text-gray-400">model off</span>
-            ) : serve.serveLimited ? (
-              <span className="chip bg-amber-500/15 text-amber-300">serve-limited</span>
+            <h3 className="font-semibold text-gray-100">Restaurant catering</h3>
+            {serve.serveLimited ? (
+              <span className="chip bg-amber-500/15 text-amber-300">stock draining</span>
+            ) : serve.servedPerHr > 0 ? (
+              <span className="chip bg-jade/15 text-jade">supplied</span>
             ) : (
-              <span className="chip bg-jade/15 text-jade">keeping up</span>
+              <span className="chip bg-gray-500/15 text-gray-400">not serving</span>
             )}
           </div>
-          {plan.serveModelEnabled === false ? (
-            <p className="text-sm text-gray-500">
-              Serve model is off — every cooked/brewed item counts as Inn income directly. Turn it on in Data.
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Mini label="Produced/hr" value={fmt(serve.sellablePerHr, 1)} />
+            <Mini label="Cater/hr" value={fmt(serve.capacityPerHr, 1)} />
+            <Mini label="Served/hr" value={fmt(serve.servedPerHr, 1)} />
+          </div>
+          <div className="mt-2 text-sm text-gray-300">
+            Inn income: <Money n={serve.innIncomePerHr} className="text-gold" />/hr
+          </div>
+          {serve.serveLimited && (
+            <p className="mt-1 text-xs text-amber-400">
+              Catering is faster than current dish/wine production, so finished stock will run down.
             </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <Mini label="Cooked/hr" value={fmt(serve.sellablePerHr, 1)} />
-                <Mini label="Serve cap/hr" value={fmt(serve.capacityPerHr, 1)} />
-                <Mini label="Served/hr" value={fmt(serve.servedPerHr, 1)} />
-              </div>
-              <div className="mt-2 text-sm text-gray-300">
-                Inn income: <Money n={serve.innIncomePerHr} className="text-gold" />/hr
-              </div>
-              {serve.serveLimited && (
-                <p className="mt-1 text-xs text-amber-400">
-                  Cooking outpaces your {fmt(serve.capacityPerHr, 1)}/hr catering — the surplus piles up to sell via Trade.
-                </p>
-              )}
-            </>
           )}
         </div>
-
         <button className="card p-4 text-left transition-colors hover:border-gold/50" onClick={() => goto("labor")}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="font-semibold text-gray-100">Retainer skill slots</h3>

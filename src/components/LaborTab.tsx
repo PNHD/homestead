@@ -32,35 +32,6 @@ export default function LaborTab({
   const [showAll, setShowAll] = useState(false);
   const [recruitQ, setRecruitQ] = useState("");
   const [rosterQ, setRosterQ] = useState("");
-  const [newName, setNewName] = useState("");
-
-  const addCustom = () => {
-    const name = newName.trim();
-    if (!name) return;
-    setPlan((p) => {
-      if (p.customRetainers.some((c) => c.name === name) || RETAINERS.some((r) => r.name === name)) return p;
-      return {
-        ...p,
-        customRetainers: [...p.customRetainers, { name }],
-        recruitedOverride: { ...p.recruitedOverride, [name]: true },
-      };
-    });
-    setNewName("");
-  };
-  const removeCustom = (name: string) =>
-    setPlan((p) => {
-      const levels = { ...p.retainerLevels };
-      delete levels[name];
-      const rec = { ...p.recruitedOverride };
-      delete rec[name];
-      return {
-        ...p,
-        customRetainers: p.customRetainers.filter((c) => c.name !== name),
-        retainerLevels: levels,
-        recruitedOverride: rec,
-      };
-    });
-
   const setLevel = (name: string, job: Job, level: number) =>
     setPlan((p) => {
       const cur = { ...(p.retainerLevels[name] ?? {}) };
@@ -239,22 +210,10 @@ export default function LaborTab({
           <div>
             <h2 className="text-lg font-semibold text-gray-100">Your roster</h2>
             <p className="text-xs text-gray-500">
-              Tick recruited and edit skill levels to match your game. Missing an NPC (e.g. Zhang Hu)? Add them below.
+              Tick recruited and edit skill levels to match your game. This roster only uses NPCs from the source sheet.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-1">
-              <input
-                className="input w-40"
-                placeholder="Add retainer name…"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addCustom()}
-              />
-              <button className="btn btn-gold" onClick={addCustom}>
-                + Add
-              </button>
-            </div>
             <input
               className="input w-44"
               placeholder="Search retainer…"
@@ -286,18 +245,6 @@ export default function LaborTab({
                   <td className="td font-medium">
                     {r.name}
                     {r.confidant && <span className="text-gold" title="Confidant"> ★</span>}
-                    {r.custom && (
-                      <>
-                        <span className="ml-2 chip bg-sky-500/15 text-sky-300">custom</span>
-                        <button
-                          className="ml-2 text-gray-500 hover:text-red-400"
-                          title="Remove custom retainer"
-                          onClick={() => removeCustom(r.name)}
-                        >
-                          ✕
-                        </button>
-                      </>
-                    )}
                   </td>
                   <td className="td text-center">
                     <input
