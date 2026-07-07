@@ -329,7 +329,9 @@ export function computeSkillUsage(plan: PlanState): SkillUsage[] {
 
 // ---- plan-wide summary ---------------------------------------------------
 export interface PlanSummary {
-  revenuePerHr: number;
+  revenuePerHr: number; // catering Inn income + trade value of surplus
+  cateringIncomePerHr: number;
+  tradeValuePerHr: number; // surplus (incl. all kiln output) sold at merchant price
   inputCostPerHr: number;
   profitPerHr: number;
   revenuePerDay: number;
@@ -342,19 +344,45 @@ export interface PlanSummary {
   shortages: number;
 }
 
+/**
+ * Trade (merchant) value per hour of everything produced that catering does NOT sell,
+ * by product. Kiln items are never caterable, so their whole output lands here; surplus
+ * dishes/wine beyond catering capacity land here too. This is the "sell the leftovers"
+ * income the guide describes (lower margin than catering).
+ */
+export function surplusTradeByProduct(plan: PlanState): Record<string, number> {
+  const produced: Record<string, number> = {};
+  for (const line of plan.craftLines) {
+    const c = calcCraftLine(line, plan);
+    if (!c.active || !c.product) continue;
+    produced[c.product.name] = (produced[c.product.name] ?? 0) + c.outPerHr;
+  }
+  const served: Record<string, number> = {};
+  for (const it of computeServe(plan).items) served[it.name] = it.servedPerHr;
+  const ov = activeOverrides(plan);
+  const out: Record<string, number> = {};
+  for (const name of Object.keys(produced)) {
+    const surplus = Math.max(0, produced[name] - (served[name] ?? 0));
+    if (surplus <= 1e-9) continue;
+    const value = surplus * tradePrice(PRODUCT_BY_NAME[name], ov);
+    if (value > 0) out[name] = value;
+  }
+  return out;
+}
+
 export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSummary {
-  let potentialInnRev = 0;
   let cost = 0;
   let craftSlots = 0;
   for (const line of plan.craftLines) {
     const c = calcCraftLine(line, plan);
     if (!c.active) continue;
-    potentialInnRev += c.revenuePerHr;
     cost += c.inputCostPerHr;
     craftSlots += 1;
   }
-  // Only explicit Restaurant/Catering rows earn Inn income; production rows just create stock.
-  const rev = computeServe(plan).innIncomePerHr;
+  // Catering Inn income + trade value of everything catering doesn't sell (kiln, surplus).
+  const cateringIncome = computeServe(plan).innIncomePerHr;
+  const tradeValue = Object.values(surplusTradeByProduct(plan)).reduce((s, v) => s + v, 0);
+  const rev = cateringIncome + tradeValue;
   const gatherSlots = plan.gatherLines.filter(
     (g) => retainerJobLevel(g.retainer, MATERIALS[g.materialName]?.job as Job, plan.retainerLevels) > 0
   ).length;
@@ -363,6 +391,8 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
   const shortages = flows.filter((f) => f.status === "stockout").length;
   return {
     revenuePerHr: rev,
+    cateringIncomePerHr: cateringIncome,
+    tradeValuePerHr: tradeValue,
     inputCostPerHr: cost,
     profitPerHr: profit,
     revenuePerDay: rev * 24,
@@ -578,6 +608,13 @@ export function computeIndustryBreakdown(plan: PlanState): IndustryStat[] {
     if (s.active) used.Restaurant = (used.Restaurant ?? 0) + 1;
     rev.Restaurant = (rev.Restaurant ?? 0) + s.incomePerHr;
     prof.Restaurant = (prof.Restaurant ?? 0) + s.incomePerHr;
+  }
+  // credit each production industry with the trade value of the surplus it sells
+  for (const [name, value] of Object.entries(surplusTradeByProduct(plan))) {
+    const ind = PRODUCT_BY_NAME[name]?.industry;
+    if (!ind) continue;
+    rev[ind] = (rev[ind] ?? 0) + value;
+    prof[ind] = (prof[ind] ?? 0) + value;
   }
   return DASHBOARD_INDUSTRIES.map((ind) => ({
     industry: ind,
@@ -835,6 +872,8 @@ export interface WeeklyPlan {
   orders: OrderItemReq[]; // still-short items
   profitPerHr: number;
   profitPerWeek: number;
+  cateringIncomePerHr: number;
+  tradeValuePerHr: number;
   lines: CraftLine[]; // for Apply
   serveLines: ServeLine[];
   notes: string[];
@@ -923,6 +962,8 @@ export function buildWeeklyPlan(plan: PlanState, opts: OptimizeOptions): WeeklyP
     orders,
     profitPerHr: summary.profitPerHr,
     profitPerWeek: summary.profitPerWeek,
+    cateringIncomePerHr: summary.cateringIncomePerHr,
+    tradeValuePerHr: summary.tradeValuePerHr,
     lines: opt.lines,
     serveLines: opt.serveLines,
     notes: opt.notes,

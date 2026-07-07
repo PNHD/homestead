@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { PlanState } from "../types";
 import { buildWeeklyPlan, farmFieldsForLevel, fmt, PRODUCT_BY_NAME, CROP_BY_NAME } from "../utils/calc";
 import { NumberInput, Money, SectionTitle } from "./Ui";
@@ -15,6 +15,9 @@ export default function WeeklyPlanTab({
 }) {
   const [bestSeller, setBestSeller] = useState(false);
   const [cropBudget, setCropBudget] = useState<number>(farmFieldsForLevel(plan.homesteadLevel));
+
+  // Changing the homestead level snaps the crop budget to that level's field count (L7 -> 4).
+  useEffect(() => setCropBudget(farmFieldsForLevel(plan.homesteadLevel)), [plan.homesteadLevel]);
 
   const wp = useMemo(
     () => buildWeeklyPlan(plan, { bestSeller, ordersFirst: true, materialSafe: true, cropBudget }),
@@ -73,9 +76,14 @@ export default function WeeklyPlanTab({
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Projected profit / week" value={<Money n={wp.profitPerWeek} className="text-jade" />} />
-        <Kpi label="Projected profit / hr" value={<Money n={wp.profitPerHr} className="text-gold" />} />
+        <Kpi label="Profit / hr" value={<Money n={wp.profitPerHr} className="text-gold" />} />
+        <Kpi
+          label="Revenue split / hr"
+          value={<Money n={wp.cateringIncomePerHr} className="text-gold" />}
+          sub={`catering + ${fmt(wp.tradeValuePerHr, 0)} trade (surplus & kiln)`}
+        />
         <Kpi label="Slots staffed" value={`${staffed}`} sub={`${wp.production.length} production · ${wp.catering.length} catering`} />
       </div>
 
