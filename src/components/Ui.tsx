@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-/** Type-to-filter combobox. Shows a filtered dropdown; click or Enter to pick. */
+/** Type-to-filter combobox. Dropdown renders in a portal so it is never clipped by a scroll frame. */
 export function Combobox({
   value,
   onChange,
@@ -17,15 +18,36 @@ export function Combobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hi, setHi] = useState(0);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+  };
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const on = () => place();
+    window.addEventListener("scroll", on, true);
+    window.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("scroll", on, true);
+      window.removeEventListener("resize", on);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -45,6 +67,7 @@ export function Combobox({
           setOpen(true);
           setQuery("");
           setHi(0);
+          place();
         }}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -70,26 +93,32 @@ export function Combobox({
           }
         }}
       />
-      {open && filtered.length > 0 && (
-        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-line bg-panel2 py-1 shadow-xl">
-          {filtered.map((o, i) => (
-            <li
-              key={o.value}
-              className={`cursor-pointer px-3 py-1.5 text-sm ${
-                i === hi ? "bg-gold/20 text-white" : "text-gray-200 hover:bg-panel"
-              }`}
-              onMouseEnter={() => setHi(i)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChange(o.value);
-                setOpen(false);
-              }}
-            >
-              {o.label}
-            </li>
-          ))}
-        </ul>
-      )}
+      {open && filtered.length > 0 && pos &&
+        createPortal(
+          <ul
+            ref={listRef}
+            style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, zIndex: 60 }}
+            className="max-h-64 overflow-auto rounded-lg border border-line bg-panel2 py-1 shadow-xl"
+          >
+            {filtered.map((o, i) => (
+              <li
+                key={o.value}
+                className={`cursor-pointer px-3 py-1.5 text-sm ${
+                  i === hi ? "bg-gold/20 text-white" : "text-gray-200 hover:bg-panel"
+                }`}
+                onMouseEnter={() => setHi(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+              >
+                {o.label}
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
     </div>
   );
 }

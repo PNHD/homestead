@@ -95,15 +95,9 @@ export default function ProductionTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <SectionTitle hint="Production makes stock. Restaurant catering consumes dish/wine stock and creates Inn income.">
-          Production &amp; Catering
-        </SectionTitle>
-        <div className="flex gap-2">
-          <button className="btn" onClick={addServe}>+ Catering line</button>
-          <button className="btn btn-gold" onClick={addCraft}>+ Production line</button>
-        </div>
-      </div>
+      <SectionTitle hint="Production makes stock. Restaurant catering consumes dish/wine stock and creates Inn income.">
+        Production &amp; Catering
+      </SectionTitle>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Mini label="Produced items/hr" value={fmt(craftCalcs.reduce((s, c) => s + c.outPerHr, 0), 1)} />
@@ -113,15 +107,19 @@ export default function ProductionTab({
       </div>
 
       <div>
-        <SectionTitle hint="Cook/Kiln/Brew rows only produce inventory and consume recipe materials.">
-          Production queues
-        </SectionTitle>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-100">Production queues</h2>
+            <p className="text-xs text-gray-500">Cook/Kiln/Brew rows only produce inventory and consume recipe materials.</p>
+          </div>
+          <button className="btn btn-gold whitespace-nowrap" onClick={addCraft}>+ Production line</button>
+        </div>
         {plan.craftLines.length === 0 ? (
           <div className="card p-8 text-center text-gray-500">Add production lines to make dishes, wine or kiln items.</div>
         ) : (
-          <div className="card overflow-x-auto">
+          <div className="card max-h-[28rem] overflow-auto">
             <table className="w-full min-w-[1080px]">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-panel">
                 <tr className="border-b border-line">
                   <th className="th">Product</th>
                   <th className="th">Retainer</th>
@@ -177,15 +175,19 @@ export default function ProductionTab({
       </div>
 
       <div>
-        <SectionTitle hint="Restaurant rows consume finished dishes/wine. Income is zero until you add Catering lines.">
-          Restaurant catering
-        </SectionTitle>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-100">Restaurant catering</h2>
+            <p className="text-xs text-gray-500">Restaurant rows consume finished dishes/wine. Income is zero until you add Catering lines.</p>
+          </div>
+          <button className="btn whitespace-nowrap" onClick={addServe}>+ Catering line</button>
+        </div>
         {(plan.serveLines ?? []).length === 0 ? (
           <div className="card p-8 text-center text-gray-500">No catering lines yet. Add one to sell cooked dishes or brewed wine for Inn income.</div>
         ) : (
-          <div className="card overflow-x-auto">
+          <div className="card max-h-[28rem] overflow-auto">
             <table className="w-full min-w-[980px]">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-panel">
                 <tr className="border-b border-line">
                   <th className="th">Item to serve</th>
                   <th className="th">Catering retainer</th>
