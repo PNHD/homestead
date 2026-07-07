@@ -95,17 +95,18 @@ export interface LevelSlots {
 
 /**
  * Slot CAPACITIES by homestead level (how many retainers each facility can staff).
- * L6 is anchored to real in-game values: 3 kitchen stoves, 6 restaurant tables,
- * 4 kiln workers, 3 brewery slots, 3 workers per gather node (player-confirmed +
- * beginner guide). Other levels are a best-effort estimate — edit in the Data tab.
+ * L6 and L7 are anchored to real in-game values (player-confirmed):
+ *   L6: 3 stoves, 6 tables, 4 kiln, 3 brewery, 3 per gather node.
+ *   L7: 4 stoves, 6 tables, 4 kiln, 8 brewery (2 per still), 4 per gather node.
+ * Other levels are a best-effort estimate — edit in the Data tab.
  * NOTE: these are physical capacities, not the game's weekly "slots to fill" hint.
  */
 export function slotsForLevel(level: number): LevelSlots {
-  const cook = level >= 6 ? 3 : level >= 4 ? 2 : 1;
+  const cook = level >= 7 ? 4 : level >= 6 ? 3 : level >= 4 ? 2 : 1;
   const cater = level >= 6 ? 6 : level >= 4 ? 4 : 2;
   const kiln = level >= 6 ? 4 : level >= 4 ? 3 : level >= 3 ? 2 : 1;
-  const brew = level >= 5 ? 3 : level >= 3 ? 2 : 1;
-  const gather = level >= 6 ? 3 : level >= 4 ? 2 : 1;
+  const brew = level >= 7 ? 8 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
+  const gather = level >= 7 ? 4 : level >= 6 ? 3 : level >= 4 ? 2 : 1;
   return {
     industry: { Inn: cook, Restaurant: cater, Kiln: kiln, Brewery: brew, "Local Specialties": gather * 4 },
     skill: { Cook: cook, Catering: cater, Kilnwork: kiln, Brewing: brew, Fishing: gather, Hunting: gather, Mining: gather, Forestry: gather },
