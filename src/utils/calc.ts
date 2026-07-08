@@ -179,7 +179,9 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     if (!mat || !mat.job) continue;
     const level = retainerJobLevel(g.retainer, mat.job, plan.retainerLevels);
     if (level <= 0) continue;
-    touch(produced, g.materialName, outputPerHr(mat.job, level, baseRate(mat.job, plan)));
+    // Timber (logging) has its own base rate (10/hr); other gather uses the job rate (5/hr).
+    const base = BASE_RATES[g.materialName] ?? baseRate(mat.job, plan);
+    touch(produced, g.materialName, outputPerHr(mat.job, level, base));
   }
   // farms produce crops
   for (const f of plan.farmLines) {
