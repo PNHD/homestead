@@ -13,10 +13,17 @@ import {
 } from "../utils/calc";
 import { NumberInput, Combobox, StatusChip, SectionTitle } from "./Ui";
 
-const GATHER_OPTIONS = GATHERABLE_MATERIALS.map((m) => ({
-  value: m.name,
-  label: `${m.name} (${m.job})`,
-})).sort((a, b) => a.label.localeCompare(b.label));
+const GATHER_JOBS: { job: Job; label: string }[] = [
+  { job: "Fishing", label: "Fishing" },
+  { job: "Hunting", label: "Hunting" },
+  { job: "Mining", label: "Mining" },
+  { job: "Forestry", label: "Forestry (wood)" },
+];
+const materialOptionsFor = (job: Job) =>
+  GATHERABLE_MATERIALS.filter((m) => m.job === job)
+    .map((m) => ({ value: m.name, label: m.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+const firstMaterialFor = (job: Job) => GATHERABLE_MATERIALS.find((m) => m.job === job)?.name ?? "";
 
 const cropOptionsForLevel = (level: number) =>
   [...CROPS]
@@ -38,13 +45,10 @@ export default function MaterialsTab({
   const [bulkStock, setBulkStock] = useState("");
 
   // gather line helpers
-  const addGather = () =>
+  const addGatherTo = (job: Job) =>
     setPlan((p) => ({
       ...p,
-      gatherLines: [
-        ...p.gatherLines,
-        { id: uid(), materialName: GATHERABLE_MATERIALS[0]?.name ?? "", retainer: "" },
-      ],
+      gatherLines: [...p.gatherLines, { id: uid(), materialName: firstMaterialFor(job), retainer: "" }],
     }));
   const updGather = (id: string, patch: Partial<GatherLine>) =>
     setPlan((p) => ({ ...p, gatherLines: p.gatherLines.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
@@ -77,55 +81,45 @@ export default function MaterialsTab({
       {/* --- supply editors --- */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-100">Gathering (Local Specialties)</h3>
-            <button className="btn" onClick={addGather}>
-              + Gather slot
-            </button>
-          </div>
-          {plan.gatherLines.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              Add fishing / hunting / mining / forestry slots to supply raw ingredients.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {plan.gatherLines.map((g) => {
-                const job = MATERIALS[g.materialName]?.job as Job | undefined;
-                const busy = busyRetainers(plan, g.id);
-                const retOpts = [
-                  { value: "", label: "— assign retainer —" },
-                  ...(job ? recruitedRetainersFor(job, plan) : [])
-                    .filter((r) => !busy.has(r.name))
-                    .map((r) => ({
-                      value: r.name,
-                      label: `${r.name} · L${r.level}`,
-                    })),
-                ];
-                return (
-                  <div key={g.id} className="flex items-center gap-2">
-                    <Combobox
-                      value={g.materialName}
-                      onChange={(v) => updGather(g.id, { materialName: v })}
-                      options={GATHER_OPTIONS}
-                      placeholder="Search material…"
-                      className="flex-1"
-                    />
-                    <Combobox
-                      value={g.retainer}
-                      onChange={(v) => updGather(g.id, { retainer: v })}
-                      options={retOpts}
-                      placeholder="Search retainer…"
-                      className="flex-1"
-                    />
-                    <button className="btn px-2 py-1" onClick={() => rmGather(g.id)}>
-                      ✕
+          <h3 className="mb-3 font-semibold text-gray-100">Gathering (Local Specialties)</h3>
+          <div className="space-y-3">
+            {GATHER_JOBS.map(({ job, label }) => {
+              const lines = plan.gatherLines.filter((g) => MATERIALS[g.materialName]?.job === job);
+              const matOpts = materialOptionsFor(job);
+              return (
+                <div key={job}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-300">{label}</span>
+                    <button className="btn px-2 py-0.5 text-xs" onClick={() => addGatherTo(job)}>
+                      + slot
                     </button>
                   </div>
-                );
-              })}
-              <div className="text-xs text-gray-500">material · retainer (rate from their skill level)</div>
-            </div>
-          )}
+                  {lines.length === 0 ? (
+                    <p className="text-xs text-gray-600">No {label.toLowerCase()} slots.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {lines.map((g) => {
+                        const busy = busyRetainers(plan, g.id);
+                        const retOpts = [
+                          { value: "", label: "— assign retainer —" },
+                          ...recruitedRetainersFor(job, plan)
+                            .filter((r) => !busy.has(r.name))
+                            .map((r) => ({ value: r.name, label: `${r.name} · L${r.level}` })),
+                        ];
+                        return (
+                          <div key={g.id} className="flex items-center gap-2">
+                            <Combobox value={g.materialName} onChange={(v) => updGather(g.id, { materialName: v })} options={matOpts} placeholder={`${label} material…`} className="flex-1" />
+                            <Combobox value={g.retainer} onChange={(v) => updGather(g.id, { retainer: v })} options={retOpts} placeholder="Retainer…" className="flex-1" />
+                            <button className="btn px-2 py-1" onClick={() => rmGather(g.id)}>✕</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="card p-4">

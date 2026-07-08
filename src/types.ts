@@ -11,6 +11,7 @@ export interface CraftLine {
   id: string;
   productName: string;
   retainer: string; // "" = unassigned (line is inactive until staffed)
+  retainer2?: string; // brewing stills take 2 retainers at homestead L7+; "" = second seat empty
   bestSeller: boolean; // this week's best-seller (+20%)
 }
 

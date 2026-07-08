@@ -128,9 +128,14 @@ export interface CraftLineCalc {
 
 export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const product = PRODUCT_BY_NAME[line.productName];
-  const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
-  const active = !!product && level > 0;
-  const outPerHr = active ? outputPerHr(product!.job, level, baseRate(product!.job, plan), workersPerStation(product!.job, plan)) : 0;
+  const wps = product ? workersPerStation(product.job, plan) : 1;
+  const base = product ? baseRate(product.job, plan) : 0;
+  // A station may seat >1 retainer (brewing = 2 per still at L7+); each seated worker adds output.
+  const seats = wps > 1 ? [line.retainer, line.retainer2 ?? ""] : [line.retainer];
+  const seatLevels = product ? seats.map((r) => retainerJobLevel(r, product.job, plan.retainerLevels)).filter((l) => l > 0) : [];
+  const level = seatLevels[0] ?? 0;
+  const active = !!product && seatLevels.length > 0;
+  const outPerHr = product ? seatLevels.reduce((s, lv) => s + outputPerHr(product.job, lv, base, wps), 0) : 0;
   const inn = product ? innPrice(product, line.bestSeller || isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
   const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
@@ -509,7 +514,10 @@ export function busyRetainers(plan: PlanState, exceptId?: string): Set<string> {
   const add = (id: string, name: string) => {
     if (name && id !== exceptId) busy.add(name);
   };
-  for (const l of plan.craftLines) add(l.id, l.retainer);
+  for (const l of plan.craftLines) {
+    add(l.id, l.retainer);
+    add(l.id, l.retainer2 ?? "");
+  }
   for (const l of plan.serveLines ?? []) add(l.id, l.retainer);
   for (const l of plan.gatherLines) add(l.id, l.retainer);
   return busy;
