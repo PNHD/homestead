@@ -86,10 +86,15 @@ export default function MaterialsTab({
             {GATHER_JOBS.map(({ job, label }) => {
               const lines = plan.gatherLines.filter((g) => MATERIALS[g.materialName]?.job === job);
               const matOpts = materialOptionsFor(job);
+              const mats = new Set(lines.map((g) => g.materialName));
+              const totalOut = [...mats].reduce((s, m) => s + (flows.find((f) => f.name === m)?.producedPerHr ?? 0), 0);
               return (
                 <div key={job}>
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-300">{label}</span>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-gray-200">
+                      {label}
+                      {totalOut > 0 && <span className="ml-2 text-xs font-normal text-jade tabular-nums">{fmt(totalOut, 1)}/hr</span>}
+                    </span>
                     <button className="btn px-2 py-0.5 text-xs" onClick={() => addGatherTo(job)}>
                       + slot
                     </button>

@@ -20,10 +20,10 @@ const SERVE_OPTIONS = PRODUCTS.filter((p) => p.type === "Dish" || p.type === "Wi
   .map((p) => ({ value: p.name, label: `${p.name} - ${p.type}` }));
 
 // craft industries shown as their own grouped card
-const CRAFT_GROUPS: { industry: string; label: string; job: string }[] = [
-  { industry: "Inn", label: "Inn (cooking)", job: "Cook" },
-  { industry: "Kiln", label: "Porcelain Kiln", job: "Kilnwork" },
-  { industry: "Brewery", label: "Aromas Brewery", job: "Brewing" },
+const CRAFT_GROUPS: { industry: string; label: string; job: string; icon: string; accent: string }[] = [
+  { industry: "Inn", label: "Inn (cooking)", job: "Cook", icon: "🍜", accent: "text-amber-300" },
+  { industry: "Kiln", label: "Porcelain Kiln", job: "Kilnwork", icon: "🏺", accent: "text-rose-300" },
+  { industry: "Brewery", label: "Aromas Brewery", job: "Brewing", icon: "🍶", accent: "text-sky-300" },
 ];
 
 const optionsForIndustry = (industry: string) =>
@@ -107,12 +107,29 @@ export default function ProductionTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {CRAFT_GROUPS.map(({ industry, label, job }) => {
+        {CRAFT_GROUPS.map(({ industry, label, job, icon, accent }) => {
           const lines = plan.craftLines.filter((l) => PRODUCT_BY_NAME[l.productName]?.industry === industry);
           const opts = optionsForIndustry(industry);
           const twoSeats = workersPerStation(job, plan) > 1;
+          const gc = lines.map((l) => calcCraftLine(l, plan));
+          const totOut = gc.reduce((s, c) => s + c.outPerHr, 0);
+          const totCost = gc.reduce((s, c) => s + c.inputCostPerHr, 0);
           return (
-            <Group key={industry} title={label} onAdd={() => addCraftTo(industry)} addLabel={twoSeats ? "+ Still" : "+ Line"}>
+            <Group
+              key={industry}
+              title={label}
+              icon={icon}
+              accent={accent}
+              total={
+                lines.length > 0 ? (
+                  <>
+                    <b className={`tabular-nums ${accent}`}>{fmt(totOut, 2)}</b>/hr · cost <Money n={totCost} />
+                  </>
+                ) : null
+              }
+              onAdd={() => addCraftTo(industry)}
+              addLabel={twoSeats ? "+ Still" : "+ Line"}
+            >
               {lines.length === 0 ? (
                 <Empty>No {label} lines yet.</Empty>
               ) : (
@@ -148,7 +165,20 @@ export default function ProductionTab({
         })}
 
         {/* Restaurant / catering */}
-        <Group title="Restaurant (catering → Inn income)" onAdd={addServe} addLabel="+ Catering">
+        <Group
+          title="Restaurant (catering → Inn income)"
+          icon="🍽️"
+          accent="text-gold"
+          total={
+            (plan.serveLines ?? []).length > 0 ? (
+              <>
+                serves <b className="tabular-nums text-gold">{fmt(serve.servedPerHr, 2)}</b>/hr · <Money n={innIncome} className="text-gold" />/hr
+              </>
+            ) : null
+          }
+          onAdd={addServe}
+          addLabel="+ Catering"
+        >
           {(plan.serveLines ?? []).length === 0 ? (
             <Empty>No catering lines — add one to sell dish/wine for Inn income.</Empty>
           ) : (
@@ -181,14 +211,34 @@ export default function ProductionTab({
   );
 }
 
-function Group({ title, addLabel, onAdd, children }: { title: string; addLabel: string; onAdd: () => void; children: ReactNode }) {
+function Group({
+  title,
+  icon,
+  accent = "text-gray-100",
+  total,
+  addLabel,
+  onAdd,
+  children,
+}: {
+  title: string;
+  icon?: string;
+  accent?: string;
+  total?: ReactNode;
+  addLabel: string;
+  onAdd: () => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="card p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="font-semibold text-gray-100">{title}</h3>
-        <button className="btn px-2 py-1 text-xs" onClick={onAdd}>{addLabel}</button>
+    <div className="card overflow-hidden p-0">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-panel2/70 px-3 py-2">
+        {icon && <span className="text-lg leading-none">{icon}</span>}
+        <h3 className={`font-semibold ${accent}`}>{title}</h3>
+        {total != null && <span className="text-xs text-gray-400">{total}</span>}
+        <button className="btn ml-auto px-2 py-1 text-xs" onClick={onAdd}>
+          {addLabel}
+        </button>
       </div>
-      <div className="space-y-2">{children}</div>
+      <div className="space-y-2 p-3">{children}</div>
     </div>
   );
 }
