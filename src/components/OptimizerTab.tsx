@@ -16,13 +16,12 @@ export default function OptimizerTab({
   plan: PlanState;
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
-  const [bestSeller, setBestSeller] = useState(false);
   const [ordersFirst, setOrdersFirst] = useState(true);
   const [materialSafe, setMaterialSafe] = useState(true);
 
   const result = useMemo(
-    () => optimizePlan(plan, { bestSeller, ordersFirst, materialSafe }),
-    [plan, bestSeller, ordersFirst, materialSafe]
+    () => optimizePlan(plan, { bestSeller: false, ordersFirst, materialSafe }),
+    [plan, ordersFirst, materialSafe]
   );
 
   const current = useMemo(() => {
@@ -60,10 +59,6 @@ export default function OptimizerTab({
             />
           </label>
         ))}
-        <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
-          <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={bestSeller} onChange={(e) => setBestSeller(e.target.checked)} />
-          Best-seller
-        </label>
         <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
           <input type="checkbox" className="h-4 w-4 accent-[#5bbf9a]" checked={ordersFirst} onChange={(e) => setOrdersFirst(e.target.checked)} />
           Orders first

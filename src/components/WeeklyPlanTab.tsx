@@ -13,15 +13,14 @@ export default function WeeklyPlanTab({
   plan: PlanState;
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
-  const [bestSeller, setBestSeller] = useState(false);
   const [cropBudget, setCropBudget] = useState<number>(farmFieldsForLevel(plan.homesteadLevel));
 
   // Changing the homestead level snaps the crop budget to that level's field count (L7 -> 4).
   useEffect(() => setCropBudget(farmFieldsForLevel(plan.homesteadLevel)), [plan.homesteadLevel]);
 
   const wp = useMemo(
-    () => buildWeeklyPlan(plan, { bestSeller, ordersFirst: true, materialSafe: true, cropBudget }),
-    [plan, bestSeller, cropBudget]
+    () => buildWeeklyPlan(plan, { bestSeller: false, ordersFirst: true, materialSafe: true, cropBudget }),
+    [plan, cropBudget]
   );
 
   const setSlots = (ind: string, n: number) =>
@@ -69,10 +68,14 @@ export default function WeeklyPlanTab({
           Farm crops (fields)
           <NumberInput value={cropBudget} min={1} max={4} onChange={setCropBudget} className="mt-1 w-20" />
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
-          <input type="checkbox" className="h-4 w-4 accent-[#d9b25b]" checked={bestSeller} onChange={(e) => setBestSeller(e.target.checked)} />
-          This week's best-seller (+20%)
-        </label>
+        <span className="pb-2 text-xs text-gray-500">
+          Best-sellers:{" "}
+          {(plan.bestSellers ?? []).length === 0 ? (
+            <span className="text-amber-400">none — pick them on the Best Sellers tab</span>
+          ) : (
+            <span className="text-gold">{(plan.bestSellers ?? []).join(", ")}</span>
+          )}
+        </span>
       </div>
 
       {/* KPI */}

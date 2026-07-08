@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PlanState } from "../types";
 import { uid } from "../utils/storage";
-import { rankProductsForRoster, recruitedRetainersFor, fmt } from "../utils/calc";
+import { rankProductsForRoster, recruitedRetainersFor, isWeeklyBest, fmt } from "../utils/calc";
 import type { Industry } from "../data/gameData";
 import { Select, Money, SectionTitle } from "./Ui";
 
@@ -14,34 +14,43 @@ export default function RecommendTab({
   plan: PlanState;
   setPlan: (updater: (p: PlanState) => PlanState) => void;
 }) {
-  const [bestSeller, setBestSeller] = useState(false);
   const [industry, setIndustry] = useState<Industry | "All">("All");
 
   const ranked = useMemo(
-    () => rankProductsForRoster(plan, bestSeller),
-    [plan.priceOverrides, plan.manualPricesEnabled, plan.retainerLevels, plan.recruitedOverride, plan.homesteadLevel, bestSeller]
+    () => rankProductsForRoster(plan, false),
+    [plan.priceOverrides, plan.manualPricesEnabled, plan.retainerLevels, plan.recruitedOverride, plan.homesteadLevel, plan.bestSellers]
   );
   const rows = useMemo(
     () => (industry === "All" ? ranked : ranked.filter((r) => r.product.industry === industry)),
     [ranked, industry]
   );
 
+  const toggleBest = (name: string) =>
+    setPlan((p) => {
+      const set = new Set(p.bestSellers ?? []);
+      set.has(name) ? set.delete(name) : set.add(name);
+      return { ...p, bestSellers: [...set] };
+    });
+  const clearBest = () => setPlan((p) => ({ ...p, bestSellers: [] }));
+
   const addToPlan = (productName: string) => {
     const p = ranked.find((r) => r.product.name === productName)?.product;
     const best = p ? recruitedRetainersFor(p.job, plan)[0]?.name ?? "" : "";
     setPlan((prev) => ({
       ...prev,
-      craftLines: [...prev.craftLines, { id: uid(), productName, retainer: best, bestSeller }],
+      craftLines: [...prev.craftLines, { id: uid(), productName, retainer: best, bestSeller: false }],
     }));
   };
 
+  const selected = plan.bestSellers ?? [];
+
   return (
     <div className="space-y-4">
-      <SectionTitle hint={`Ranked by profit per item. Only recipes unlocked at Homestead Lv ${plan.homesteadLevel} are shown.`}>
+      <SectionTitle hint={`Star this week's best-sellers (+20% Inn price) — the Weekly Plan & Optimizer then prioritise them. Only recipes unlocked at Lv ${plan.homesteadLevel} shown.`}>
         Best sellers &amp; recommendations
       </SectionTitle>
 
-      <div className="card flex flex-wrap items-end gap-4 p-4">
+      <div className="card flex flex-wrap items-center gap-3 p-4">
         <label className="text-xs text-gray-400">
           Industry
           <Select
@@ -51,22 +60,30 @@ export default function RecommendTab({
             className="mt-1 w-36"
           />
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-gray-300">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-[#d9b25b]"
-            checked={bestSeller}
-            onChange={(e) => setBestSeller(e.target.checked)}
-          />
-          Best-seller (+20%)
-        </label>
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-gray-400">This week's best-sellers:</span>
+          {selected.length === 0 ? (
+            <span className="text-gray-600">none picked — star the ⭐ items the game marks this week</span>
+          ) : (
+            <>
+              {selected.map((n) => (
+                <span key={n} className="chip bg-gold/15 text-gold">
+                  {n}
+                </span>
+              ))}
+              <button className="btn px-2 py-1 text-xs" onClick={clearBest}>
+                Clear
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[900px]">
-          <thead>
+        <table className="w-full min-w-[920px]">
+          <thead className="sticky top-0 z-10 bg-panel">
             <tr className="border-b border-line">
-              <th className="th w-10">#</th>
+              <th className="th w-12 text-center">Best?</th>
               <th className="th">Product</th>
               <th className="th">Industry</th>
               <th className="th text-right">Inn $</th>
@@ -77,44 +94,52 @@ export default function RecommendTab({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.product.name} className="border-b border-line/50 last:border-0">
-                <td className="td text-gray-500">{i + 1}</td>
-                <td className="td font-medium">
-                  {r.product.name}
-                  {i < 3 && industry === "All" && <span className="ml-2 text-gold">★</span>}
-                </td>
-                <td className="td text-gray-400">{r.product.industry}</td>
-                <td className="td text-right tabular-nums">{r.price}</td>
-                <td className="td text-right font-semibold tabular-nums">{fmt(r.profitPerUnit, 1)}</td>
-                <td className="td text-right tabular-nums">
-                  {r.hasRetainer ? (
-                    <span className="text-gray-300">
-                      L{r.level}
-                      {r.estimated && <span className="ml-1 text-[10px] text-amber-400">est</span>}
-                    </span>
-                  ) : (
-                    <span className="text-amber-400">none · @L4</span>
-                  )}
-                </td>
-                <td className="td text-right font-semibold">
-                  <Money n={r.profitPerHr} className="text-jade" />
-                </td>
-                <td className="td text-right">
-                  <button className="btn px-2 py-1 text-xs" onClick={() => addToPlan(r.product.name)}>
-                    + Plan
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const isBest = isWeeklyBest(r.product.name, plan);
+              return (
+                <tr key={r.product.name} className={`border-b border-line/50 last:border-0 ${isBest ? "bg-gold/5" : ""}`}>
+                  <td className="td text-center">
+                    <button
+                      onClick={() => toggleBest(r.product.name)}
+                      title={isBest ? "Unmark best-seller" : "Mark as this week's best-seller (+20%)"}
+                      className={`text-lg leading-none ${isBest ? "text-gold" : "text-gray-600 hover:text-gray-300"}`}
+                    >
+                      {isBest ? "★" : "☆"}
+                    </button>
+                  </td>
+                  <td className="td font-medium">{r.product.name}</td>
+                  <td className="td text-gray-400">{r.product.industry}</td>
+                  <td className={`td text-right tabular-nums ${isBest ? "text-gold" : ""}`}>{r.price}</td>
+                  <td className="td text-right font-semibold tabular-nums">{fmt(r.profitPerUnit, 1)}</td>
+                  <td className="td text-right tabular-nums">
+                    {r.hasRetainer ? (
+                      <span className="text-gray-300">
+                        L{r.level}
+                        {r.estimated && <span className="ml-1 text-[10px] text-amber-400">est</span>}
+                      </span>
+                    ) : (
+                      <span className="text-amber-400">none · @L4</span>
+                    )}
+                  </td>
+                  <td className="td text-right font-semibold">
+                    <Money n={r.profitPerHr} className="text-jade" />
+                  </td>
+                  <td className="td text-right">
+                    <button className="btn px-2 py-1 text-xs" onClick={() => addToPlan(r.product.name)}>
+                      + Plan
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        <span className="text-gray-300">Profit/unit</span> = Inn price − input cost (fixed per item —
-        this is what makes a "best seller"). <span className="text-gray-300">Profit/hr</span> also depends on how
-        fast your assigned retainer works, so it uses your best recruited retainer's level for that job (or a
-        level-4 reference if you have none yet). Edit retainer levels on the Roster tab.
+        Star the items the game flags as this week's best-sellers — they get +20% Inn price, so the ranking,
+        the <span className="text-gray-300">Weekly Plan</span> and the <span className="text-gray-300">Optimizer</span>{" "}
+        automatically prefer producing and catering them. <span className="text-gray-300">Profit/unit</span> = Inn
+        price − input cost.
       </p>
     </div>
   );

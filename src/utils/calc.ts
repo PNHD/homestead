@@ -102,6 +102,10 @@ export function innPrice(p: Product, bestSeller: boolean, overrides: PriceOverri
   const base = overrides[p.name]?.inn ?? p.restaurant ?? p.merchant ?? 0;
   return bestSeller ? round(base * (1 + BEST_SELLER_BONUS)) : base;
 }
+/** Is this product one of this week's selected best-sellers (+20%)? */
+export function isWeeklyBest(name: string, plan?: PlanState): boolean {
+  return (plan?.bestSellers ?? []).includes(name);
+}
 /** Trade for Profit Price — manual sale to an NPC (no best-seller bonus). */
 export function tradePrice(p: Product, overrides: PriceOverrides = {}): number {
   return overrides[p.name]?.trade ?? p.merchant ?? 0;
@@ -127,7 +131,7 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
   const active = !!product && level > 0;
   const outPerHr = active ? outputPerHr(product!.job, level, baseRate(product!.job, plan), workersPerStation(product!.job, plan)) : 0;
-  const inn = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
+  const inn = product ? innPrice(product, line.bestSeller || isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
   const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
   const inputCostPerHr = outPerHr * (product?.inputCost ?? 0);
@@ -249,7 +253,7 @@ export function calcServeLine(line: ServeLine, plan: PlanState): ServeLineCalc {
   const level = validProduct ? retainerJobLevel(line.retainer, "Catering", plan.retainerLevels) : 0;
   const active = validProduct && level > 0;
   const servedPerHr = active ? outputPerHr("Catering", level, baseRate("Catering", plan)) : 0;
-  const price = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
+  const price = product ? innPrice(product, line.bestSeller || isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
   return {
     line,
     product,
@@ -271,7 +275,7 @@ export function computeServe(plan: PlanState): ServeResult {
     if (c.product.type !== "Dish" && c.product.type !== "Wine") continue;
     const cur = (produced[c.product.name] ??= { qty: 0, bs: false });
     cur.qty += c.outPerHr;
-    cur.bs = cur.bs || line.bestSeller;
+    cur.bs = cur.bs || line.bestSeller || isWeeklyBest(c.product.name, plan);
   }
 
   const lineCalcs = (plan.serveLines ?? []).map((line) => calcServeLine(line, plan));
@@ -627,7 +631,7 @@ export function rankProductsForRoster(plan: PlanState, bestSeller: boolean): Ros
     const level = best?.level ?? 0;
     const useLevel = level > 0 ? level : 4;
     const outPerHr = outputPerHr(p.job, useLevel, baseRate(p.job, plan));
-    const price = innPrice(p, bestSeller, ov);
+    const price = innPrice(p, bestSeller || isWeeklyBest(p.name, plan), ov);
     const revenuePerHr = outPerHr * price;
     const inputCostPerHr = outPerHr * (p.inputCost ?? 0);
     return {
@@ -764,7 +768,7 @@ function bestProductForIndustry(
   for (const p of PRODUCTS) {
     if (p.industry !== ind) continue;
     if (!isUnlocked(p, plan.homesteadLevel)) continue;
-    if (innPrice(p, opts.bestSeller, activeOverrides(plan)) <= 0) continue;
+    if (innPrice(p, opts.bestSeller || isWeeklyBest(p.name, plan), activeOverrides(plan)) <= 0) continue;
     const retainer = nextRetainer(p.job, used, plan);
     if (!retainer) continue;
     const line: CraftLine = { id: "probe", productName: p.name, retainer, bestSeller: opts.bestSeller };
@@ -808,7 +812,11 @@ function buildServeLines(
   );
   const candidates = [...produced]
     .map((name) => PRODUCT_BY_NAME[name])
-    .sort((a, b) => innPrice(b, bestSeller, activeOverrides(plan)) - innPrice(a, bestSeller, activeOverrides(plan)));
+    .sort(
+      (a, b) =>
+        innPrice(b, bestSeller || isWeeklyBest(b.name, plan), activeOverrides(plan)) -
+        innPrice(a, bestSeller || isWeeklyBest(a.name, plan), activeOverrides(plan))
+    );
   if (candidates.length === 0) return [];
   if (caterers.length === 0) {
     notes.push("No recruited Catering retainer — dishes/wine can't earn Inn income (catering is the only revenue).");
@@ -1065,7 +1073,7 @@ export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
     const c = calcCraftLine(line, plan);
     if (!c.product || !c.active) continue;
     rate[c.product.name] = (rate[c.product.name] ?? 0) + c.outPerHr;
-    if (line.bestSeller) bs[c.product.name] = true;
+    if (line.bestSeller || isWeeklyBest(c.product.name, plan)) bs[c.product.name] = true;
   }
   const out: ProducedItem[] = [];
   for (const name of Object.keys(rate)) {

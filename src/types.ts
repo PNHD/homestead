@@ -84,6 +84,8 @@ export interface PlanState {
   skillSlots: Partial<Record<Job, number>>;
   /** per-job base output/hr override (level-1 rate) to match your building level; empty = sheet defaults */
   rateOverrides: Partial<Record<Job, number>>;
+  /** this week's best-seller product names (+20% Inn price) — the planner prioritises these */
+  bestSellers: string[];
   /** epoch ms since which production has been accumulating (Trade tracker) */
   trackingSince: number;
   /** per-product epoch ms of the last "sold" reset (Trade tracker) */
@@ -134,6 +136,7 @@ export const emptyPlan = (): PlanState => ({
   recruitedOverride: {},
   skillSlots: { ...DEFAULT_SKILL_SLOTS },
   rateOverrides: {},
+  bestSellers: [],
   trackingSince: Date.now(),
   soldAt: {},
 });
