@@ -18,9 +18,11 @@ const GATHER_OPTIONS = GATHERABLE_MATERIALS.map((m) => ({
   label: `${m.name} (${m.job})`,
 })).sort((a, b) => a.label.localeCompare(b.label));
 
-const CROP_OPTIONS = [...CROPS]
-  .sort((a, b) => a.name.localeCompare(b.name))
-  .map((c) => ({ value: c.name, label: `${c.name} (${fmt(c.yieldPerHrFarm ?? 0, 0)}/hr/farm)` }));
+const cropOptionsForLevel = (level: number) =>
+  [...CROPS]
+    .filter((c) => (c.reqLvl ?? 1) <= level)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((c) => ({ value: c.name, label: `${c.name} (${fmt(c.yieldPerHrFarm ?? 0, 0)}/hr/farm)` }));
 
 const ITEM_OPTIONS = orderableItems().map((n) => ({ value: n, label: n }));
 
@@ -142,7 +144,7 @@ export default function MaterialsTab({
                   <Combobox
                     value={f.cropName}
                     onChange={(v) => updFarm(f.id, { cropName: v })}
-                    options={CROP_OPTIONS}
+                    options={cropOptionsForLevel(plan.homesteadLevel)}
                     placeholder="Search crop…"
                     className="flex-1"
                   />
