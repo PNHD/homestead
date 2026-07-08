@@ -88,7 +88,7 @@ export default function LaborTab({
     setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, true])) }));
   const clearAll = () =>
     setPlan((p) => ({ ...p, recruitedOverride: Object.fromEntries(RETAINERS.map((r) => [r.name, false])) }));
-  const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {} }));
+  const resetRoster = () => setPlan((p) => ({ ...p, recruitedOverride: {}, retainerLevels: {} }));
   const recruitPriority = () =>
     setPlan((p) => ({
       ...p,
