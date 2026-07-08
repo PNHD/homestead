@@ -8,6 +8,7 @@ import {
   retainerJobLevel,
   isRecruited,
   rosterEntries,
+  workforceFromPools,
   PRODUCT_BY_NAME,
 } from "../utils/calc";
 import { NumberInput, SectionTitle } from "./Ui";
@@ -33,6 +34,23 @@ export default function LaborTab({
   const [showAll, setShowAll] = useState(false);
   const [recruitQ, setRecruitQ] = useState("");
   const [rosterQ, setRosterQ] = useState("");
+  const [pools, setPools] = useState<Record<string, string>>({});
+
+  const applyQuickFill = () => {
+    const parsed: Partial<Record<Job, number[]>> = {};
+    for (const j of JOBS) {
+      const lvls = (pools[j] ?? "").split(/[^\d]+/).map(Number).filter((n) => n >= 1 && n <= 10);
+      if (lvls.length) parsed[j] = lvls;
+    }
+    const total = Object.values(parsed).reduce((s, a) => s + a.length, 0);
+    if (!total) return;
+    if (!confirm(`Set your roster from these ${total} workers? This replaces the current recruited list and skill levels.`))
+      return;
+    const wf = workforceFromPools(parsed);
+    setPlan((p) => ({ ...p, recruitedOverride: wf.recruitedOverride, retainerLevels: wf.retainerLevels }));
+    const short = Object.entries(wf.unfilled).filter(([, n]) => n > 0);
+    if (short.length) alert("Not enough sheet retainers for: " + short.map(([j, n]) => `${j} (${n})`).join(", "));
+  };
   const setLevel = (name: string, job: Job, level: number) =>
     setPlan((p) => {
       const cur = { ...(p.retainerLevels[name] ?? {}) };
@@ -95,6 +113,34 @@ export default function LaborTab({
           plans around <em>your</em> roster. Nothing is preloaded from anyone else's game.
         </div>
       )}
+
+      <div>
+        <SectionTitle hint="Fastest way in: type the skill levels you have per job. Names won't match your renamed NPCs — only the pool matters.">
+          Quick fill from your workforce
+        </SectionTitle>
+        <div className="card p-4">
+          <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
+            {JOBS.map((job) => (
+              <label key={job} className="flex items-center gap-2 text-sm text-gray-300">
+                <span className="w-16 shrink-0 text-gray-400">{job}</span>
+                <input
+                  className="input flex-1"
+                  placeholder="e.g. 6 6 2 1 1"
+                  value={pools[job] ?? ""}
+                  onChange={(e) => setPools((p) => ({ ...p, [job]: e.target.value }))}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button className="btn btn-gold" onClick={applyQuickFill}>Apply workforce</button>
+            <span className="text-xs text-gray-500">
+              Type each worker's level per job (space/comma separated). Replaces the recruited list below.
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div>
         <SectionTitle hint="Best recruited retainer per job, by your levels. ★ = confidant.">
           Best retainer per job

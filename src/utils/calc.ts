@@ -441,6 +441,46 @@ export function rosterEntries(_plan?: PlanState): RosterEntry[] {
   return RETAINERS.map((r) => ({ name: r.name, confidant: r.confidant }));
 }
 
+/**
+ * Build the recruited set + skill levels from per-job level pools (e.g. Fishing: [6,6,2,1,1]).
+ * Each level is mapped to a DISTINCT sheet retainer that has that skill — single-skill
+ * retainers first — and that retainer's other skills are zeroed so it stays a single-job
+ * worker (matches a renamed one-function NPC). Names won't match your renamed game NPCs;
+ * only the skill+level pool matters to the planner.
+ */
+export function workforceFromPools(pools: Partial<Record<Job, number[]>>): {
+  recruitedOverride: Record<string, boolean>;
+  retainerLevels: Record<string, Partial<Record<Job, number>>>;
+  unfilled: Partial<Record<Job, number>>; // levels that had no free retainer with that skill
+} {
+  const recruitedOverride: Record<string, boolean> = {};
+  const retainerLevels: Record<string, Partial<Record<Job, number>>> = {};
+  const unfilled: Partial<Record<Job, number>> = {};
+  const used = new Set<string>();
+  // assign the scarcest skills first so shared multi-skill retainers aren't grabbed early
+  const jobs = (Object.keys(pools) as Job[]).filter((j) => (pools[j] ?? []).some((l) => l > 0));
+  for (const job of jobs) {
+    const levels = (pools[job] ?? []).filter((l) => l > 0).sort((a, b) => b - a);
+    const cands = RETAINERS.filter((r) => (r.skills[job] ?? 0) > 0 && !used.has(r.name)).sort(
+      (a, b) => Object.keys(a.skills).length - Object.keys(b.skills).length || a.name.localeCompare(b.name)
+    );
+    levels.forEach((lvl, i) => {
+      const r = cands[i];
+      if (!r) {
+        unfilled[job] = (unfilled[job] ?? 0) + 1;
+        return;
+      }
+      used.add(r.name);
+      recruitedOverride[r.name] = true;
+      const skills: Partial<Record<Job, number>> = {};
+      for (const sk of Object.keys(r.skills) as Job[]) skills[sk] = 0; // neutralise other skills
+      skills[job] = lvl;
+      retainerLevels[r.name] = skills;
+    });
+  }
+  return { recruitedOverride, retainerLevels, unfilled };
+}
+
 /** Best retainers for a job by effective skill (ignores recruited status). */
 export function bestRetainersFor(job: Job, levels?: RetainerLevels): RetainerPick[] {
   return RETAINERS.filter((r) => retainerJobLevel(r.name, job, levels) > 0)
