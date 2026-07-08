@@ -461,9 +461,12 @@ export function workforceFromPools(pools: Partial<Record<Job, number[]>>): {
   const jobs = (Object.keys(pools) as Job[]).filter((j) => (pools[j] ?? []).some((l) => l > 0));
   for (const job of jobs) {
     const levels = (pools[job] ?? []).filter((l) => l > 0).sort((a, b) => b - a);
-    const cands = RETAINERS.filter((r) => (r.skills[job] ?? 0) > 0 && !used.has(r.name)).sort(
-      (a, b) => Object.keys(a.skills).length - Object.keys(b.skills).length || a.name.localeCompare(b.name)
-    );
+    // any retainer can be a worker; prefer ones who have this skill innately, then single-skill ones
+    const cands = RETAINERS.filter((r) => !used.has(r.name)).sort((a, b) => {
+      const ai = (a.skills[job] ?? 0) > 0 ? 0 : 1;
+      const bi = (b.skills[job] ?? 0) > 0 ? 0 : 1;
+      return ai - bi || Object.keys(a.skills).length - Object.keys(b.skills).length || a.name.localeCompare(b.name);
+    });
     levels.forEach((lvl, i) => {
       const r = cands[i];
       if (!r) {
