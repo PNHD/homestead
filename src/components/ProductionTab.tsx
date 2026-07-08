@@ -101,8 +101,8 @@ export default function ProductionTab({
       </SectionTitle>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Mini label="Produced items/hr" value={fmt(craftCalcs.reduce((s, c) => s + c.outPerHr, 0), 1)} />
-        <Mini label="Catered items/hr" value={fmt(serve.servedPerHr, 1)} />
+        <Mini label="Produced items/hr" value={fmt(craftCalcs.reduce((s, c) => s + c.outPerHr, 0), 2)} />
+        <Mini label="Catered items/hr" value={fmt(serve.servedPerHr, 2)} />
         <Mini label="Inn income/hr" value={<Money n={innIncome} className="text-gold" />} />
         <Mini label="Net profit/hr" value={<Money n={innIncome - productionCost} className="text-jade" />} />
       </div>

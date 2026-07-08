@@ -14,6 +14,7 @@ import {
   EFF_MULT_UNKNOWN,
   MYSTIC_JOBS,
   EFF_L6_NO_MYSTIC,
+  WORKERS_PER_STATION_L7,
   BEST_SELLER_BONUS,
   PRODUCTS,
   MATERIALS,
@@ -71,9 +72,20 @@ export function baseRate(job: Job | string, plan?: PlanState): number {
   return plan?.rateOverrides?.[job as Job] ?? BASE_RATES[job] ?? 1;
 }
 
-/** Items produced per hour by one retainer at a job & skill level. */
-export function outputPerHr(job: Job | string, level: number, base = BASE_RATES[job] ?? 1): number {
-  return base * efficiency(level, job).mult;
+/** Retainers sharing one station for a job at the plan's homestead level (brewing = 2 per still at L7+). */
+export function workersPerStation(job: Job | string, plan?: PlanState): number {
+  if (plan && plan.homesteadLevel >= 7) return WORKERS_PER_STATION_L7[job] ?? 1;
+  return 1;
+}
+
+/**
+ * Items produced per hour by one retainer at a job & skill level.
+ * workersPerStation > 1 (e.g. brewing's 2-per-still at L7+): the station's base output is
+ * shared, so each retainer contributes base × (efficiency − (1 − 1/workers)).
+ */
+export function outputPerHr(job: Job | string, level: number, base = BASE_RATES[job] ?? 1, workersPerStation = 1): number {
+  const shared = 1 - 1 / Math.max(1, workersPerStation);
+  return base * (efficiency(level, job).mult - shared);
 }
 
 /** A retainer's effective skill level for a job — user override wins over the sheet. */
@@ -114,7 +126,7 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const product = PRODUCT_BY_NAME[line.productName];
   const level = product ? retainerJobLevel(line.retainer, product.job, plan.retainerLevels) : 0;
   const active = !!product && level > 0;
-  const outPerHr = active ? outputPerHr(product!.job, level, baseRate(product!.job, plan)) : 0;
+  const outPerHr = active ? outputPerHr(product!.job, level, baseRate(product!.job, plan), workersPerStation(product!.job, plan)) : 0;
   const inn = product ? innPrice(product, line.bestSeller, activeOverrides(plan)) : 0;
   const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
