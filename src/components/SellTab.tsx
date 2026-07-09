@@ -1,5 +1,5 @@
 import type { PlanState } from "../types";
-import { computeSellables, fmt, fmtMoney } from "../utils/calc";
+import { computeSellables, reSync, fmt, fmtMoney } from "../utils/calc";
 import { Money, SectionTitle, StatCard } from "./Ui";
 
 export default function SellTab({
@@ -19,18 +19,15 @@ export default function SellTab({
       ...p,
       priceOverrides: { ...p.priceOverrides, [name]: { ...p.priceOverrides[name], trade: v || undefined } },
     }));
-  const sold = (name: string) =>
-    setPlan((p) => ({ ...p, inventory: { ...p.inventory, [name]: 0 } }));
+  const sold = (name: string) => setPlan((p) => reSync(p, Date.now(), { [name]: 0 }));
   const soldAll = () =>
-    setPlan((p) => {
-      const inv = { ...p.inventory };
-      for (const it of items) if (it.onHand > 0) inv[it.name] = 0;
-      return { ...p, inventory: inv };
-    });
+    setPlan((p) =>
+      reSync(p, Date.now(), Object.fromEntries(items.filter((i) => i.onHand > 0).map((i) => [i.name, 0])))
+    );
 
   return (
     <div className="space-y-5">
-      <SectionTitle hint="Everything you have in stock and what it's worth to sell. Trade = manual NPC sale; Inn = auto-sale price.">
+      <SectionTitle hint="Everything in stock and what it's worth. On-hand auto-syncs from production/gathering/consumption while the app is open — no re-typing. Trade = manual NPC sale; Inn = auto-sale price.">
         Sell &amp; Trade for Profit
       </SectionTitle>
 

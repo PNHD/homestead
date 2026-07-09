@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PlanState, Order, OrderReq } from "../types";
 import { uid } from "../utils/storage";
-import { computeOrderRequirements, orderableItems, parseItemQtyLines, fmt } from "../utils/calc";
+import { computeOrderRequirements, orderableItems, parseItemQtyLines, reSync, fmt } from "../utils/calc";
 import { NumberInput, Combobox, SectionTitle } from "./Ui";
 
 const ITEM_OPTIONS = orderableItems().map((n) => ({ value: n, label: n }));
@@ -182,11 +182,9 @@ export default function OrdersTab({
                     <td className="td text-right tabular-nums">{fmt(r.needed, 0)}</td>
                     <td className="td text-right">
                       <NumberInput
-                        value={r.inStock}
+                        value={Math.round(r.inStock)}
                         min={0}
-                        onChange={(n) =>
-                          setPlan((p) => ({ ...p, inventory: { ...p.inventory, [r.item]: n } }))
-                        }
+                        onChange={(n) => setPlan((p) => reSync(p, Date.now(), { [r.item]: n }))}
                         className="w-24 text-right"
                       />
                     </td>

@@ -1130,6 +1130,37 @@ export function computeSellables(plan: PlanState): SellItem[] {
   return out.sort((a, b) => b.tradeValue - a.tradeValue || b.innValue - a.innValue || b.onHand - a.onHand);
 }
 
+// ---- live inventory (auto-sync) ------------------------------------------
+/**
+ * Inventory projected forward from the last snapshot: base count + net flow/hr ×
+ * hours elapsed since `trackingSince`. Stock rises/falls with production, gathering,
+ * farming and consumption on its own, so you don't re-type it every visit. Never
+ * goes below 0. Net flow is inventory-independent, so this is safe to feed anywhere.
+ */
+export function liveInventory(plan: PlanState, now: number): Record<string, number> {
+  const net: Record<string, number> = {};
+  for (const f of computeMaterialFlows(plan)) net[f.name] = f.netPerHr;
+  const hrs = Math.max(0, (now - (plan.trackingSince || now)) / 3_600_000);
+  const out: Record<string, number> = {};
+  for (const name of new Set([...Object.keys(plan.inventory), ...Object.keys(net)])) {
+    out[name] = Math.max(0, (plan.inventory[name] ?? 0) + (net[name] ?? 0) * hrs);
+  }
+  return out;
+}
+
+/**
+ * Bake the current projection into the base snapshot, apply the user's corrections,
+ * and restart the clock. Call from every inventory edit so one correction re-anchors
+ * all items instead of letting the others jump. ponytail: rounds to whole units on
+ * each edit — a sub-unit of drift per correction, not worth per-item timestamps.
+ */
+export function reSync(plan: PlanState, now: number, edits: Record<string, number> = {}): PlanState {
+  const inventory: Record<string, number> = {};
+  for (const [k, v] of Object.entries(liveInventory(plan, now))) inventory[k] = round(v, 0);
+  for (const [k, v] of Object.entries(edits)) inventory[k] = Math.max(0, v);
+  return { ...plan, inventory, trackingSince: now };
+}
+
 // ---- paste helpers -------------------------------------------------------
 export function parseItemQtyLines(text: string, validItems: string[]): { item: string; qty: number }[] {
   const byLower = Object.fromEntries(validItems.map((n) => [n.toLowerCase(), n]));

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { PlanState } from "./types";
 import { slotsForLevel } from "./types";
 import { loadPlan, savePlan } from "./utils/storage";
-import { computeMaterialFlows, computeSummary, fmtMoney } from "./utils/calc";
+import { computeMaterialFlows, computeSummary, liveInventory, fmtMoney } from "./utils/calc";
 import { StatCard } from "./components/Ui";
 import DashboardTab from "./components/DashboardTab";
 import WeeklyPlanTab from "./components/WeeklyPlanTab";
@@ -49,8 +49,19 @@ export default function App() {
     savePlan(plan);
   }, [plan]);
 
-  const flows = useMemo(() => computeMaterialFlows(plan), [plan]);
-  const summary = useMemo(() => computeSummary(plan, flows), [plan, flows]);
+  // tick so the live inventory projection visibly advances while the app is open
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // stock the tabs see = base snapshot projected to `now` by net flow; edits still
+  // write the real (base) plan via setPlan, so corrections re-anchor correctly.
+  const livePlan = useMemo(() => ({ ...plan, inventory: liveInventory(plan, now) }), [plan, now]);
+
+  const flows = useMemo(() => computeMaterialFlows(livePlan), [livePlan]);
+  const summary = useMemo(() => computeSummary(livePlan, flows), [livePlan, flows]);
 
   return (
     <div className="min-h-full">
@@ -127,16 +138,16 @@ export default function App() {
       </nav>
 
       <main className="mx-auto max-w-7xl px-4 py-6">
-        {tab === "dashboard" && <DashboardTab plan={plan} goto={(t) => setTab(t as TabId)} />}
-        {tab === "weekly" && <WeeklyPlanTab plan={plan} setPlan={setPlan} />}
-        {tab === "production" && <ProductionTab plan={plan} setPlan={setPlan} />}
-        {tab === "sell" && <SellTab plan={plan} setPlan={setPlan} />}
-        {tab === "recommend" && <RecommendTab plan={plan} setPlan={setPlan} />}
-        {tab === "optimizer" && <OptimizerTab plan={plan} setPlan={setPlan} />}
-        {tab === "materials" && <MaterialsTab plan={plan} setPlan={setPlan} />}
-        {tab === "orders" && <OrdersTab plan={plan} setPlan={setPlan} />}
-        {tab === "labor" && <LaborTab plan={plan} setPlan={setPlan} />}
-        {tab === "data" && <DataTab plan={plan} setPlan={setPlan} />}
+        {tab === "dashboard" && <DashboardTab plan={livePlan} goto={(t) => setTab(t as TabId)} />}
+        {tab === "weekly" && <WeeklyPlanTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "production" && <ProductionTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "sell" && <SellTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "recommend" && <RecommendTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "optimizer" && <OptimizerTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "materials" && <MaterialsTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "orders" && <OrdersTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "labor" && <LaborTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "data" && <DataTab plan={livePlan} setPlan={setPlan} />}
       </main>
 
       <footer className="mx-auto max-w-7xl px-4 py-8 text-center text-xs text-gray-600">

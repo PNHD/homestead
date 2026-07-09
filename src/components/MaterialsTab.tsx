@@ -4,6 +4,7 @@ import type { PlanState, GatherLine, FarmLine } from "../types";
 import { uid } from "../utils/storage";
 import {
   computeMaterialFlows,
+  reSync,
   GATHERABLE_MATERIALS,
   recruitedRetainersFor,
   busyRetainers,
@@ -64,15 +65,12 @@ export default function MaterialsTab({
     setPlan((p) => ({ ...p, farmLines: p.farmLines.filter((f) => f.id !== id) }));
 
   const setStock = (name: string, v: number) =>
-    setPlan((p) => ({ ...p, inventory: { ...p.inventory, [name]: v } }));
+    setPlan((p) => reSync(p, Date.now(), { [name]: v }));
   const setRunway = (v: number) => setPlan((p) => ({ ...p, runwayTargetH: v }));
   const importStock = () => {
     const rows = parseItemQtyLines(bulkStock, ITEM_OPTIONS.map((o) => o.value));
     if (rows.length === 0) return;
-    setPlan((p) => ({
-      ...p,
-      inventory: rows.reduce((inv, r) => ({ ...inv, [r.item]: r.qty }), { ...p.inventory }),
-    }));
+    setPlan((p) => reSync(p, Date.now(), rows.reduce((e, r) => ({ ...e, [r.item]: r.qty }), {} as Record<string, number>)));
     setBulkStock("");
   };
 
@@ -162,7 +160,7 @@ export default function MaterialsTab({
       {/* --- flow table --- */}
       <div>
         <div className="flex items-end justify-between">
-          <SectionTitle hint="Needed = drawn by production. Produced = farmed + gathered + crafted.">
+          <SectionTitle hint="Needed = drawn by production. Produced = farmed + gathered + crafted. In stock auto-updates from net flow while the app is open — edit any count to correct it and re-anchor.">
             Material flow &amp; sync
           </SectionTitle>
           <label className="mb-3 flex items-center gap-2 text-xs text-gray-400">
@@ -176,7 +174,7 @@ export default function MaterialsTab({
           <Combobox
             value={addItem}
             onChange={(v) => {
-              if (v) setPlan((p) => ({ ...p, inventory: { ...p.inventory, [v]: p.inventory[v] ?? 0 } }));
+              if (v) setPlan((p) => reSync(p, Date.now(), p.inventory[v] == null ? { [v]: 0 } : {}));
               setAddItem("");
             }}
             options={ITEM_OPTIONS}
@@ -229,7 +227,7 @@ export default function MaterialsTab({
                     </td>
                     <td className="td text-right">
                       <NumberInput
-                        value={f.inStock}
+                        value={Math.round(f.inStock)}
                         min={0}
                         onChange={(n) => setStock(f.name, n)}
                         className="w-24 text-right"

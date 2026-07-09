@@ -17,6 +17,10 @@ function normalizePlan(parsed: Partial<PlanState>): PlanState {
   }
   return {
     ...plan,
+    // Anchor the live-inventory clock at load/import time: the stored stock is the
+    // snapshot "as of now", so projection starts from 0 elapsed hours (no runaway
+    // accrual from a days-old trackingSince).
+    trackingSince: Date.now(),
     craftLines: plan.craftLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
     serveLines: plan.serveLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
     gatherLines: plan.gatherLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
