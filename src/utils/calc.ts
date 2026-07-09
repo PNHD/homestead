@@ -433,6 +433,116 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
   };
 }
 
+// ---- skill upgrade / respec advisor --------------------------------------
+/** Highest level that still adds output: mystic jobs peak at 6 (the +11.6% L5→L6 jump); Brewing/Catering flatline at 5. */
+export function usefulSkillCap(job: Job | string): number {
+  return MYSTIC_JOBS.includes(job) ? 6 : 5;
+}
+
+export interface SkillUpgrade {
+  retainer: string;
+  job: Job;
+  level: number; // current
+  toLevel: number; // next useful level (capped)
+  cap: number;
+  gainPerHr: number; // Δ profit/hr for the next single level
+  gainToCapPerHr: number; // Δ profit/hr from here all the way to cap
+  jackpot: boolean; // the mystic L5→L6 step
+  atCap: boolean;
+}
+
+function profitWithLevel(plan: PlanState, retainer: string, job: Job, level: number): number {
+  const retainerLevels = { ...plan.retainerLevels, [retainer]: { ...plan.retainerLevels[retainer], [job]: level } };
+  return computeSummary({ ...plan, retainerLevels }, []).profitPerHr;
+}
+
+/**
+ * Rank every staffed retainer by the profit/hr gained from levelling their skill.
+ * Uses the exact model: bump one level and diff computeSummary — so it already accounts
+ * for the production↔catering bottleneck (extra output only pays if catering can serve it).
+ */
+export function skillUpgrades(plan: PlanState): SkillUpgrade[] {
+  const base = computeSummary(plan, []).profitPerHr;
+  const seen = new Map<string, { retainer: string; job: Job }>();
+  const add = (retainer: string, job?: Job) => {
+    if (!retainer || !job) return;
+    if (retainerJobLevel(retainer, job, plan.retainerLevels) <= 0) return;
+    seen.set(`${retainer}|${job}`, { retainer, job });
+  };
+  for (const l of plan.craftLines) {
+    const c = calcCraftLine(l, plan);
+    if (!c.active || !c.product) continue;
+    add(l.retainer, c.product.job);
+    add(l.retainer2 ?? "", c.product.job);
+  }
+  for (const s of plan.serveLines ?? []) add(s.retainer, "Catering");
+  for (const g of plan.gatherLines) add(g.retainer, MATERIALS[g.materialName]?.job as Job);
+
+  const out: SkillUpgrade[] = [];
+  for (const { retainer, job } of seen.values()) {
+    const level = retainerJobLevel(retainer, job, plan.retainerLevels);
+    const cap = usefulSkillCap(job);
+    const atCap = level >= cap;
+    out.push({
+      retainer,
+      job,
+      level,
+      toLevel: Math.min(level + 1, cap),
+      cap,
+      gainPerHr: atCap ? 0 : profitWithLevel(plan, retainer, job, level + 1) - base,
+      gainToCapPerHr: atCap ? 0 : profitWithLevel(plan, retainer, job, cap) - base,
+      jackpot: !atCap && MYSTIC_JOBS.includes(job) && level === 5,
+      atCap,
+    });
+  }
+  return out.sort((a, b) => b.gainToCapPerHr - a.gainToCapPerHr || b.gainPerHr - a.gainPerHr);
+}
+
+export interface RespecInfo {
+  freeSlots: { job: Job; open: number }[]; // jobs with capacity you haven't staffed
+  assignable: { name: string; job: Job; level: number }[]; // idle but their skill's job has an open slot → just staff them
+  respec: { name: string; job: Job; level: number }[]; // idle and their skill's job is full → respec elsewhere
+}
+
+/**
+ * Reset/respec leads. An idle retainer whose skill's job still has an open slot doesn't need a
+ * respec — just staff them. Only when their job is full is respec (reallocate points to a job
+ * that has openings) the move. We don't guess the game's point-conversion, so this names who &
+ * where, not the post-respec level.
+ */
+export function respecAdvice(plan: PlanState): RespecInfo {
+  const staffed = new Set<string>();
+  for (const l of plan.craftLines) {
+    const c = calcCraftLine(l, plan);
+    if (!c.active) continue;
+    staffed.add(l.retainer);
+    if (l.retainer2) staffed.add(l.retainer2);
+  }
+  for (const s of plan.serveLines ?? []) if (retainerJobLevel(s.retainer, "Catering", plan.retainerLevels) > 0) staffed.add(s.retainer);
+  for (const g of plan.gatherLines) {
+    const j = MATERIALS[g.materialName]?.job as Job | undefined;
+    if (j && retainerJobLevel(g.retainer, j, plan.retainerLevels) > 0) staffed.add(g.retainer);
+  }
+  const open: Partial<Record<Job, number>> = {};
+  for (const u of computeSkillUsage(plan)) if (u.capacity - u.used > 0) open[u.job] = u.capacity - u.used;
+  const freeSlots = Object.entries(open).map(([job, n]) => ({ job: job as Job, open: n as number }));
+
+  const assignable: RespecInfo["assignable"] = [];
+  const respec: RespecInfo["respec"] = [];
+  for (const [name, on] of Object.entries(plan.recruitedOverride)) {
+    if (!on || staffed.has(name)) continue;
+    const skills = { ...RETAINER_BY_NAME[name]?.skills, ...plan.retainerLevels[name] } as Partial<Record<Job, number>>;
+    let bestJob: Job | undefined;
+    let bestLv = 0;
+    for (const [job, lv] of Object.entries(skills)) if ((lv ?? 0) > bestLv) ((bestLv = lv as number), (bestJob = job as Job));
+    if (!bestJob || bestLv < 4) continue;
+    (open[bestJob] ? assignable : respec).push({ name, job: bestJob, level: bestLv });
+  }
+  assignable.sort((a, b) => b.level - a.level);
+  respec.sort((a, b) => b.level - a.level);
+  return { freeSlots, assignable: assignable.slice(0, 12), respec: respec.slice(0, 12) };
+}
+
 // ---- labor suggestions ---------------------------------------------------
 export interface RetainerPick {
   name: string;

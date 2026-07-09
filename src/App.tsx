@@ -10,6 +10,7 @@ import ProductionTab from "./components/ProductionTab";
 import SellTab from "./components/SellTab";
 import MaterialsTab from "./components/MaterialsTab";
 import LaborTab from "./components/LaborTab";
+import SkillAdvisorTab from "./components/SkillAdvisorTab";
 import OrdersTab from "./components/OrdersTab";
 import RecommendTab from "./components/RecommendTab";
 import OptimizerTab from "./components/OptimizerTab";
@@ -25,6 +26,7 @@ type TabId =
   | "materials"
   | "orders"
   | "labor"
+  | "skills"
   | "data";
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "📊" },
@@ -36,6 +38,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "materials", label: "Materials", icon: "🌾" },
   { id: "orders", label: "Orders", icon: "📜" },
   { id: "labor", label: "Roster", icon: "🧑‍🌾" },
+  { id: "skills", label: "Skill Advisor", icon: "📈" },
   { id: "data", label: "Data", icon: "💾" },
 ];
 
@@ -147,6 +150,7 @@ export default function App() {
         {tab === "materials" && <MaterialsTab plan={livePlan} setPlan={setPlan} />}
         {tab === "orders" && <OrdersTab plan={livePlan} setPlan={setPlan} />}
         {tab === "labor" && <LaborTab plan={livePlan} setPlan={setPlan} />}
+        {tab === "skills" && <SkillAdvisorTab plan={livePlan} setPlan={setPlan} />}
         {tab === "data" && <DataTab plan={livePlan} setPlan={setPlan} />}
       </main>
 
