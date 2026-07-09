@@ -5,7 +5,7 @@ import { RETAINERS } from "../data/gameData";
 const KEY = "wwm-homestead-plan-v1";
 const SHEET_RETAINERS = new Set(RETAINERS.map((r) => r.name));
 
-export function normalizePlan(parsed: Partial<PlanState>): PlanState {
+export function normalizePlan(parsed: Partial<PlanState>, opts: { anchorInventoryNow?: boolean } = {}): PlanState {
   const base = emptyPlan();
   const plan = { ...base, ...parsed, serveLines: parsed.serveLines ?? [] };
   const cleanRetainer = (name?: string) => (name && SHEET_RETAINERS.has(name) ? name : "");
@@ -21,10 +21,7 @@ export function normalizePlan(parsed: Partial<PlanState>): PlanState {
   }
   return {
     ...plan,
-    // Anchor the live-inventory clock at load/import time: the stored stock is the
-    // snapshot "as of now", so projection starts from 0 elapsed hours (no runaway
-    // accrual from a days-old trackingSince).
-    trackingSince: Date.now(),
+    trackingSince: opts.anchorInventoryNow ? Date.now() : Number(plan.trackingSince) || Date.now(),
     craftLines: plan.craftLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
     serveLines: plan.serveLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
     gatherLines: plan.gatherLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
@@ -69,7 +66,7 @@ export function importPlan(file: File): Promise<PlanState> {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        resolve(normalizePlan(parsed));
+        resolve(normalizePlan(parsed, { anchorInventoryNow: true }));
       } catch (e) {
         reject(e);
       }

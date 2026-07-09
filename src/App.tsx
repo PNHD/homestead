@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { PlanState } from "./types";
 import { slotsForLevel } from "./types";
 import { loadPlan, savePlan } from "./utils/storage";
-import { computeMaterialFlows, computeSummary, liveInventory, fmtMoney } from "./utils/calc";
+import { computeMaterialFlows, computeSummary, liveInventory, reSync, fmtMoney } from "./utils/calc";
 import { StatCard } from "./components/Ui";
 import DashboardTab from "./components/DashboardTab";
 import WeeklyPlanTab from "./components/WeeklyPlanTab";
@@ -45,17 +45,20 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
 export default function App() {
   const [plan, setPlanState] = useState<PlanState>(() => loadPlan());
   const [tab, setTab] = useState<TabId>("dashboard");
+  const [now, setNow] = useState(() => Date.now());
 
-  const setPlan = (updater: (p: PlanState) => PlanState) => setPlanState((p) => updater(p));
+  const setPlan = (updater: (p: PlanState) => PlanState) => {
+    const t = Date.now();
+    setNow(t);
+    setPlanState((p) => updater(reSync(p, t)));
+  };
 
   useEffect(() => {
     savePlan(plan);
   }, [plan]);
 
-  // tick so the live inventory projection visibly advances while the app is open
-  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    const t = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(t);
   }, []);
 

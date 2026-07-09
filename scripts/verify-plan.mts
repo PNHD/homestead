@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { computeMaterialFlows, computeServe, computeSkillUsage, computeSummary, effectiveFarmFields, surplusTradeByProduct } from "../src/utils/calc.ts";
+import { computeMaterialFlows, computeServe, computeSkillUsage, computeSummary, effectiveFarmFields, liveInventory, reSync, surplusTradeByProduct } from "../src/utils/calc.ts";
 import { emptyPlan } from "../src/types.ts";
 import { normalizePlan } from "../src/utils/storage.ts";
 
@@ -27,6 +27,13 @@ assert(plan.skillSlots.Catering === 7, `Lv7 Catering should migrate to 7, got ${
 assert(fields === 4, `four 16-plot crops should count as 4 fields, got ${fields}`);
 assert(usage.find((u) => u.job === "Catering")?.over === false, "7 catering lines should fit Lv7 capacity");
 assert(summary.revenuePerDay > 0 && summary.profitPerDay > 0, "plan should produce positive revenue");
+
+const t0 = 1_800_000_000_000;
+const liveProbe = { ...plan, inventory: { "Copper Ore": 55 }, trackingSince: t0 };
+const copperNet = computeMaterialFlows(liveProbe).find((f) => f.name === "Copper Ore")?.netPerHr ?? 0;
+assert(copperNet < 0, "fixture should drain Copper Ore");
+assert(liveInventory(liveProbe, t0 + 3_600_000)["Copper Ore"] === Math.max(0, 55 + copperNet), "live inventory should move by net/hr after one hour");
+assert(reSync(liveProbe, t0 + 3_600_000).trackingSince === t0 + 3_600_000, "resync should re-anchor inventory time");
 
 console.log("Lv7 fixture check");
 console.log("fields", fields, "cateringSlots", plan.skillSlots.Catering, "serveLines", plan.serveLines.length);

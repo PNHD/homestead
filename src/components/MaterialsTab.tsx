@@ -5,6 +5,7 @@ import { uid } from "../utils/storage";
 import {
   computeMaterialFlows,
   reSync,
+  round,
   GATHERABLE_MATERIALS,
   recruitedRetainersFor,
   busyRetainers,
@@ -227,8 +228,9 @@ export default function MaterialsTab({
                     </td>
                     <td className="td text-right">
                       <NumberInput
-                        value={Math.round(f.inStock)}
+                        value={round(f.inStock, 1)}
                         min={0}
+                        step={0.1}
                         onChange={(n) => setStock(f.name, n)}
                         className="w-24 text-right"
                       />
