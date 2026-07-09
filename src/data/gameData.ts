@@ -42,8 +42,9 @@ export const RETAINERS: Retainer[] = [{"name":"Angler","recruited":false,"confid
 //   Brew   1.3333 per STILL (45 min): a still is worked by 2 retainers at L7+, so each
 //          retainer contributes base x (efficiency - 0.5). Verified: still L2+L1 = 42m4s,
 //          still 2xL1 = 43m17s, 4 stills (2 L2 + 6 L1) = 5.62/hr. See WORKERS_PER_STATION.
-// The sheet's "1/hr" for Cook/Cater/Brew and "4/hr" for Kiln were all wrong. Gather defaults to 5/hr for every gathered material.
-export const BASE_RATES: Record<string, number> = {"Cook": 1.3333, "Cater": 0.906, "Catering": 0.906, "Kilnwork": 3.0, "Brewing": 1.3333, "Fishing": 5.0, "Hunting": 5.0, "Mining": 5.0, "Forestry": 5.0};
+// The sheet's "1/hr" for Cook/Cater/Brew and "4/hr" for Kiln were all wrong.
+// Gather is 5/hr by job, except Timber which the sheet lists at 10/hr.
+export const BASE_RATES: Record<string, number> = {"Cook": 1.3333, "Cater": 0.906, "Catering": 0.906, "Kilnwork": 3.0, "Brewing": 1.3333, "Fishing": 5.0, "Hunting": 5.0, "Mining": 5.0, "Forestry": 5.0, "Timber": 10.0};
 
 // Retainers that SHARE one production station (Brewing = 2 per still at homestead L7+).
 // Per-retainer output = base x (efficiency - (1 - 1/workers)); 2 per still -> (efficiency - 0.5).

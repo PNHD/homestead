@@ -34,6 +34,7 @@ for (const job of ["Fishing", "Hunting", "Mining", "Forestry"]) {
     assert(Math.abs(outputPerHr(job, lv, 5) - expected[lv - 1]) < 1e-9, `${job} L${lv} gather should be ${expected[lv - 1]}/hr`);
   }
 }
+assert(flows.find((f) => f.name === "Timber")?.producedPerHr === 31.4, "Timber should use the sheet's 10/hr base before level multipliers");
 
 const t0 = 1_800_000_000_000;
 const liveProbe = { ...plan, inventory: { "Copper Ore": 55 }, trackingSince: t0 };

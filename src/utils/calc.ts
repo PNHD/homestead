@@ -192,8 +192,8 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     if (!mat || !mat.job) continue;
     const level = retainerJobLevel(g.retainer, mat.job, plan.retainerLevels);
     if (level <= 0) continue;
-    // All gathered materials use the job base rate (5/hr by default), then the retainer level multiplier.
-    const base = baseRate(mat.job, plan);
+    // Gather uses a material-specific base when the sheet has one (Timber = 10/hr), otherwise the job base (usually 5/hr).
+    const base = BASE_RATES[g.materialName] ?? baseRate(mat.job, plan);
     touch(produced, g.materialName, outputPerHr(mat.job, level, base));
   }
   // farms produce crops

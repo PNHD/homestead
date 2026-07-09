@@ -203,7 +203,7 @@ export default function DataTab({
             );
           })}
           <span className="text-xs text-gray-500">
-            Defaults: Cook 1.333, Cater 0.906, Brew 1.333, Kiln 3, gather 5. Gold border = your override. Brewery with
+            Defaults: Cook 1.333, Cater 0.906, Brew 1.333, Kiln 3, gather 5, Timber 10. Gold border = your override. Brewery with
             "2 per still" — set the per-worker rate so all slots sum to your in-game output.
           </span>
         </div>
