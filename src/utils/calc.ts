@@ -11,7 +11,6 @@ import {
   BASE_RATES,
   EFF_MULT_VERIFIED,
   EFF_MULT_VERIFIED_MAX,
-  EFF_MULT_UNKNOWN,
   MYSTIC_JOBS,
   EFF_L6_NO_MYSTIC,
   WORKERS_PER_STATION_L7,
@@ -59,12 +58,11 @@ export function efficiency(level: number, job?: Job | string): Eff {
   const lv = Math.max(1, Math.round(level));
   const mystic = !!job && MYSTIC_JOBS.includes(job);
   if (lv <= 5) return { mult: EFF_MULT_VERIFIED[lv] ?? 1.02, estimated: false };
-  if (lv === EFF_MULT_VERIFIED_MAX) {
-    // L6: mystic jobs jump to 125%; Brewing/Catering hold the pre-mystic value.
-    return mystic ? { mult: EFF_MULT_VERIFIED[6], estimated: false } : { mult: EFF_L6_NO_MYSTIC, estimated: true };
+  if (lv <= EFF_MULT_VERIFIED_MAX) {
+    // L6+ mystic jobs use the 125% floor for now; Brewing/Catering hold the pre-mystic value.
+    return mystic ? { mult: EFF_MULT_VERIFIED[lv] ?? EFF_MULT_VERIFIED[6], estimated: lv > 6 } : { mult: EFF_L6_NO_MYSTIC, estimated: true };
   }
-  // L7-10 not published: hold at the best known value for this job.
-  return { mult: mystic ? EFF_MULT_UNKNOWN : EFF_L6_NO_MYSTIC, estimated: true };
+  return { mult: mystic ? EFF_MULT_VERIFIED[EFF_MULT_VERIFIED_MAX] : EFF_L6_NO_MYSTIC, estimated: true };
 }
 
 /** Base output/hr for a job — user's rate override (to match building level) wins over the sheet. */
@@ -194,8 +192,8 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
     if (!mat || !mat.job) continue;
     const level = retainerJobLevel(g.retainer, mat.job, plan.retainerLevels);
     if (level <= 0) continue;
-    // Timber (logging) has its own base rate (10/hr); other gather uses the job rate (5/hr).
-    const base = BASE_RATES[g.materialName] ?? baseRate(mat.job, plan);
+    // All gathered materials use the job base rate (5/hr by default), then the retainer level multiplier.
+    const base = baseRate(mat.job, plan);
     touch(produced, g.materialName, outputPerHr(mat.job, level, base));
   }
   // farms produce crops

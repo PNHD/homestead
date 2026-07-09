@@ -42,8 +42,8 @@ export const RETAINERS: Retainer[] = [{"name":"Angler","recruited":false,"confid
 //   Brew   1.3333 per STILL (45 min): a still is worked by 2 retainers at L7+, so each
 //          retainer contributes base x (efficiency - 0.5). Verified: still L2+L1 = 42m4s,
 //          still 2xL1 = 43m17s, 4 stills (2 L2 + 6 L1) = 5.62/hr. See WORKERS_PER_STATION.
-// The sheet's "1/hr" for Cook/Cater/Brew and "4/hr" for Kiln were all wrong. Gather (5) unverified.
-export const BASE_RATES: Record<string, number> = {"Cook": 1.3333, "Cater": 0.906, "Catering": 0.906, "Kilnwork": 3.0, "Brewing": 1.3333, "Fishing": 5.0, "Hunting": 5.0, "Mining": 5.0, "Forestry": 5.0, "Timber": 10.0};
+// The sheet's "1/hr" for Cook/Cater/Brew and "4/hr" for Kiln were all wrong. Gather defaults to 5/hr for every gathered material.
+export const BASE_RATES: Record<string, number> = {"Cook": 1.3333, "Cater": 0.906, "Catering": 0.906, "Kilnwork": 3.0, "Brewing": 1.3333, "Fishing": 5.0, "Hunting": 5.0, "Mining": 5.0, "Forestry": 5.0};
 
 // Retainers that SHARE one production station (Brewing = 2 per still at homestead L7+).
 // Per-retainer output = base x (efficiency - (1 - 1/workers)); 2 per still -> (efficiency - 0.5).
@@ -53,10 +53,9 @@ export const WORKERS_PER_STATION_L7: Record<string, number> = {"Brewing": 2};
 // L1 102%, L2 105%, L3 107%, L4 110%, L5 112%, L6 125%. The big L6 jump is the
 // Mystic Skill, which only Cook/Kilnwork/Fishing/Hunting/Mining/Forestry get —
 // Brewing & Catering have no Mystic Skill, so their L6 uses the pre-mystic value.
-// L7-10 are not published yet; held at the best known value (never below L6).
-export const EFF_MULT_VERIFIED: Record<number, number> = {1: 1.02, 2: 1.05, 3: 1.07, 4: 1.10, 5: 1.12, 6: 1.25};
-export const EFF_MULT_VERIFIED_MAX = 6;
-export const EFF_MULT_UNKNOWN = 1.25; // L7+ floor (unknown; assumed no worse than L6)
+// L7 is held at the L6 floor for now; update this one table when a new in-game number is confirmed.
+export const EFF_MULT_VERIFIED: Record<number, number> = {1: 1.02, 2: 1.05, 3: 1.07, 4: 1.10, 5: 1.12, 6: 1.25, 7: 1.25};
+export const EFF_MULT_VERIFIED_MAX = 7;
 // Jobs that gain the Mystic Skill at L6 (the +5%+ that makes L6 = 125%).
 export const MYSTIC_JOBS: readonly string[] = ["Cook", "Kilnwork", "Fishing", "Hunting", "Mining", "Forestry"];
 // Brewing/Catering L6: no Mystic jump, so they hold the L5 curve (estimate — sheet gives no exact figure).
@@ -67,4 +66,3 @@ export const BEST_SELLER_BONUS = 0.2;
 export const JOB_BY_INDUSTRY: Record<Industry, Job> = {
   Inn: "Cook", Restaurant: "Catering", Kiln: "Kilnwork", Brewery: "Brewing", "Local Specialties": "Fishing",
 };
-

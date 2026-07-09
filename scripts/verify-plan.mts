@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { computeMaterialFlows, computeServe, computeSkillUsage, computeSummary, effectiveFarmFields, liveInventory, reSync, surplusTradeByProduct } from "../src/utils/calc.ts";
+import { computeMaterialFlows, computeServe, computeSkillUsage, computeSummary, effectiveFarmFields, liveInventory, outputPerHr, reSync, surplusTradeByProduct } from "../src/utils/calc.ts";
 import { emptyPlan } from "../src/types.ts";
 import { normalizePlan } from "../src/utils/storage.ts";
 
@@ -27,6 +27,13 @@ assert(plan.skillSlots.Catering === 7, `Lv7 Catering should migrate to 7, got ${
 assert(fields === 4, `four 16-plot crops should count as 4 fields, got ${fields}`);
 assert(usage.find((u) => u.job === "Catering")?.over === false, "7 catering lines should fit Lv7 capacity");
 assert(summary.revenuePerDay > 0 && summary.profitPerDay > 0, "plan should produce positive revenue");
+
+for (const job of ["Fishing", "Hunting", "Mining", "Forestry"]) {
+  const expected = [5.1, 5.25, 5.35, 5.5, 5.6, 6.25, 6.25];
+  for (let lv = 1; lv <= 7; lv++) {
+    assert(Math.abs(outputPerHr(job, lv, 5) - expected[lv - 1]) < 1e-9, `${job} L${lv} gather should be ${expected[lv - 1]}/hr`);
+  }
+}
 
 const t0 = 1_800_000_000_000;
 const liveProbe = { ...plan, inventory: { "Copper Ore": 55 }, trackingSince: t0 };
