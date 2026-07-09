@@ -109,7 +109,7 @@ export default function App() {
             <StatCard
               label="Active slots"
               value={`${summary.activeCraftSlots + summary.activeGatherSlots}`}
-              sub={`${summary.activeCraftSlots} craft · ${summary.activeGatherSlots} gather · ${summary.farms} farms`}
+              sub={`${summary.activeCraftSlots} craft · ${summary.activeGatherSlots} gather · ${summary.farms} fields`}
             />
             <StatCard
               label="Material shortages"

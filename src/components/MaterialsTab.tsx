@@ -133,7 +133,7 @@ export default function MaterialsTab({
             </button>
           </div>
           {plan.farmLines.length === 0 ? (
-            <p className="text-sm text-gray-500">Add farm fields to grow crops (watered + fertilized yield).</p>
+            <p className="text-sm text-gray-500">Add farm fields to grow crops (16 plots = 1 field).</p>
           ) : (
             <div className="space-y-2">
               {plan.farmLines.map((f) => (
@@ -151,7 +151,7 @@ export default function MaterialsTab({
                   </button>
                 </div>
               ))}
-              <div className="text-xs text-gray-500">columns: crop · number of full farms</div>
+              <div className="text-xs text-gray-500">columns: crop · fields or plots (16 plots = 1 field)</div>
             </div>
           )}
         </div>

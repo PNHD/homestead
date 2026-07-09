@@ -34,7 +34,7 @@ export interface GatherLine {
 export interface FarmLine {
   id: string;
   cropName: string;
-  farms: number; // number of full farms/fields
+  farms: number; // fields, or plots when >4; 16 plots = 1 field
 }
 
 /** A single requirement inside a touchstone order. */
@@ -102,7 +102,7 @@ export interface LevelSlots {
  * Slot CAPACITIES by homestead level (how many retainers each facility can staff).
  * L6 and L7 are anchored to real in-game values (player-confirmed):
  *   L6: 3 stoves, 6 tables, 4 kiln, 3 brewery, 3 per gather node.
- *   L7: 4 stoves, 6 tables, 4 kiln, 8 brewery (2 per still), 4 per gather node.
+ *   L7: 4 stoves, 7 tables, 4 kiln, 8 brewery (2 per still), 4 per gather node.
  * Other levels are a best-effort estimate — edit in the Data tab.
  * NOTE: these are physical capacities, not the game's weekly "slots to fill" hint.
  */

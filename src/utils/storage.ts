@@ -5,10 +5,14 @@ import { RETAINERS } from "../data/gameData";
 const KEY = "wwm-homestead-plan-v1";
 const SHEET_RETAINERS = new Set(RETAINERS.map((r) => r.name));
 
-function normalizePlan(parsed: Partial<PlanState>): PlanState {
+export function normalizePlan(parsed: Partial<PlanState>): PlanState {
   const base = emptyPlan();
   const plan = { ...base, ...parsed, serveLines: parsed.serveLines ?? [] };
   const cleanRetainer = (name?: string) => (name && SHEET_RETAINERS.has(name) ? name : "");
+  const skillSlots = { ...plan.skillSlots };
+  if (plan.homesteadLevel >= 7 && (plan.industrySlots.Restaurant ?? 0) >= 7 && skillSlots.Catering === 6) {
+    skillSlots.Catering = 7;
+  }
   // migrate old per-line best-seller flags into the weekly best-seller set
   if ((plan.bestSellers ?? []).length === 0) {
     const marked = new Set<string>();
@@ -26,6 +30,7 @@ function normalizePlan(parsed: Partial<PlanState>): PlanState {
     gatherLines: plan.gatherLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),
     retainerLevels: Object.fromEntries(Object.entries(plan.retainerLevels).filter(([name]) => SHEET_RETAINERS.has(name))),
     recruitedOverride: Object.fromEntries(Object.entries(plan.recruitedOverride).filter(([name]) => SHEET_RETAINERS.has(name))),
+    skillSlots,
   };
 }
 

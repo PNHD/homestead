@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "verify:plan": "node node_modules/esbuild/bin/esbuild scripts/verify-plan.mts --bundle --platform=node --format=esm --outfile=.tmp/verify-plan.mjs && node .tmp/verify-plan.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

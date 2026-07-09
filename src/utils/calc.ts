@@ -78,6 +78,12 @@ export function workersPerStation(job: Job | string, plan?: PlanState): number {
   return 1;
 }
 
+/** Farm input accepts full fields (1-4) or plot counts; 16 plots = 1 field. */
+export function effectiveFarmFields(value: number): number {
+  const n = Math.max(0, value || 0);
+  return n > 4 ? n / 16 : n;
+}
+
 /**
  * Items produced per hour by one retainer at a job & skill level.
  * workersPerStation > 1 (e.g. brewing's 2-per-still at L7+): the station's base output is
@@ -196,7 +202,7 @@ export function computeMaterialFlows(plan: PlanState): MaterialFlow[] {
   for (const f of plan.farmLines) {
     const crop = CROP_BY_NAME[f.cropName];
     if (!crop) continue;
-    touch(produced, f.cropName, (crop.yieldPerHrFarm ?? 0) * Math.max(0, f.farms));
+    touch(produced, f.cropName, (crop.yieldPerHrFarm ?? 0) * effectiveFarmFields(f.farms));
   }
   // restaurant catering consumes finished dishes/wine and is the only Inn income source.
   for (const item of computeServe(plan).items) touch(needed, item.name, item.servedPerHr);
@@ -413,7 +419,7 @@ export function computeSummary(plan: PlanState, flows: MaterialFlow[]): PlanSumm
   const gatherSlots = plan.gatherLines.filter(
     (g) => retainerJobLevel(g.retainer, MATERIALS[g.materialName]?.job as Job, plan.retainerLevels) > 0
   ).length;
-  const farms = plan.farmLines.reduce((s, f) => s + Math.max(0, f.farms), 0);
+  const farms = plan.farmLines.reduce((s, f) => s + effectiveFarmFields(f.farms), 0);
   const profit = rev - cost;
   const shortages = flows.filter((f) => f.status === "stockout").length;
   return {
