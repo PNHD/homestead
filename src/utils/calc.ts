@@ -953,51 +953,54 @@ export interface WeeklyGatherRow {
   runwayH: number;
   retainer: string; // best recruited gatherer for the job ("" = none)
 }
+export interface WeeklyTradeRow {
+  name: string;
+  surplusPerHr: number; // produced but not catered — sell it manually
+  tradePrice: number;
+  tradeValuePerHr: number;
+}
 export interface WeeklyPlan {
   production: WeeklyProductionRow[];
   catering: WeeklyCateringRow[];
   farming: WeeklyGrowRow[];
   gathering: WeeklyGatherRow[];
+  trade: WeeklyTradeRow[];
   orders: OrderItemReq[]; // still-short items
   profitPerHr: number;
   profitPerWeek: number;
   cateringIncomePerHr: number;
   tradeValuePerHr: number;
-  lines: CraftLine[]; // for Apply
-  serveLines: ServeLine[];
-  notes: string[];
 }
 
 const GATHER_JOBS: Job[] = ["Fishing", "Hunting", "Mining", "Forestry"];
 
 /**
- * Assemble the whole weekly loop: let the optimizer staff production + catering,
- * then read the resulting material flows to say what to farm and gather to feed it.
- * Everything respects homestead level, the player's slots, and their recruited roster.
+ * Analyse the player's OWN setup (their Production, Catering, Gathering & Farm lines) and
+ * report the whole week: what they make & cater, plus what to farm, gather and trade to
+ * support it — and projected profit. This does NOT invent a new plan (the Optimizer tab does).
  */
-export function buildWeeklyPlan(plan: PlanState, opts: OptimizeOptions): WeeklyPlan {
-  const opt = optimizePlan(plan, opts);
-  const probe: PlanState = { ...plan, craftLines: opt.lines, serveLines: opt.serveLines };
-  const flows = computeMaterialFlows(probe);
+export function buildWeeklyPlan(plan: PlanState): WeeklyPlan {
+  const flows = computeMaterialFlows(plan);
 
-  // order items that got a reserved production slot (so we can label kiln fillers etc.)
+  // order items that are still short (so we can flag kiln fillers etc.)
   const orderShortNames = new Set(
     computeOrderRequirements(plan).filter((r) => r.shortfall > 0).map((r) => r.item)
   );
 
-  const production: WeeklyProductionRow[] = opt.lines.map((l) => {
-    const c = calcCraftLine(l, probe);
+  const production: WeeklyProductionRow[] = plan.craftLines.map((l) => {
+    const c = calcCraftLine(l, plan);
+    const seats = [l.retainer, l.retainer2].filter(Boolean).join(" + ");
     return {
       industry: c.product?.industry ?? "—",
       productName: l.productName,
-      retainer: l.retainer,
+      retainer: seats,
       outPerHr: c.outPerHr,
       isOrderFiller: orderShortNames.has(l.productName),
     };
   });
 
-  const catering: WeeklyCateringRow[] = opt.serveLines.map((l) => {
-    const s = calcServeLine(l, probe);
+  const catering: WeeklyCateringRow[] = (plan.serveLines ?? []).map((l) => {
+    const s = calcServeLine(l, plan);
     return {
       productName: l.productName,
       retainer: l.retainer,
@@ -1040,22 +1043,38 @@ export function buildWeeklyPlan(plan: PlanState, opts: OptimizeOptions): WeeklyP
     })
     .sort((a, b) => a.runwayH - b.runwayH);
 
-  const orders = computeOrderRequirements(probe).filter((r) => r.shortfall > 0);
-  const summary = computeSummary(probe, flows);
+  // Trade: dish/wine/kiln you produce beyond what catering sells — sell it manually.
+  const producedByName: Record<string, number> = {};
+  for (const l of plan.craftLines) {
+    const c = calcCraftLine(l, plan);
+    if (c.active && c.product) producedByName[c.product.name] = (producedByName[c.product.name] ?? 0) + c.outPerHr;
+  }
+  const servedByName: Record<string, number> = {};
+  for (const it of computeServe(plan).items) servedByName[it.name] = it.servedPerHr;
+  const ov = activeOverrides(plan);
+  const trade: WeeklyTradeRow[] = Object.keys(producedByName)
+    .map((name) => {
+      const surplus = producedByName[name] - (servedByName[name] ?? 0);
+      const tp = tradePrice(PRODUCT_BY_NAME[name], ov);
+      return { name, surplusPerHr: surplus, tradePrice: tp, tradeValuePerHr: surplus * tp };
+    })
+    .filter((t) => t.surplusPerHr > 1e-6 && t.tradeValuePerHr > 0)
+    .sort((a, b) => b.tradeValuePerHr - a.tradeValuePerHr);
+
+  const orders = computeOrderRequirements(plan).filter((r) => r.shortfall > 0);
+  const summary = computeSummary(plan, flows);
 
   return {
     production,
     catering,
     farming,
     gathering,
+    trade,
     orders,
     profitPerHr: summary.profitPerHr,
     profitPerWeek: summary.profitPerWeek,
     cateringIncomePerHr: summary.cateringIncomePerHr,
     tradeValuePerHr: summary.tradeValuePerHr,
-    lines: opt.lines,
-    serveLines: opt.serveLines,
-    notes: opt.notes,
   };
 }
 
