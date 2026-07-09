@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import type { PlanState } from "../types";
-import { uid } from "../utils/storage";
-import { rankProductsForRoster, recruitedRetainersFor, isWeeklyBest, fmt } from "../utils/calc";
+import { rankProductsForRoster, isWeeklyBest, fmt } from "../utils/calc";
 import type { Industry } from "../data/gameData";
 import { Select, Money, SectionTitle } from "./Ui";
 
@@ -32,15 +31,6 @@ export default function RecommendTab({
       return { ...p, bestSellers: [...set] };
     });
   const clearBest = () => setPlan((p) => ({ ...p, bestSellers: [] }));
-
-  const addToPlan = (productName: string) => {
-    const p = ranked.find((r) => r.product.name === productName)?.product;
-    const best = p ? recruitedRetainersFor(p.job, plan)[0]?.name ?? "" : "";
-    setPlan((prev) => ({
-      ...prev,
-      craftLines: [...prev.craftLines, { id: uid(), productName, retainer: best, bestSeller: false }],
-    }));
-  };
 
   const selected = plan.bestSellers ?? [];
 
@@ -90,7 +80,6 @@ export default function RecommendTab({
               <th className="th text-right">Profit/unit</th>
               <th className="th text-right">Your retainer</th>
               <th className="th text-right">Profit/hr</th>
-              <th className="th"></th>
             </tr>
           </thead>
           <tbody>
@@ -123,11 +112,6 @@ export default function RecommendTab({
                   </td>
                   <td className="td text-right font-semibold">
                     <Money n={r.profitPerHr} className="text-jade" />
-                  </td>
-                  <td className="td text-right">
-                    <button className="btn px-2 py-1 text-xs" onClick={() => addToPlan(r.product.name)}>
-                      + Plan
-                    </button>
                   </td>
                 </tr>
               );

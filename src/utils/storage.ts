@@ -9,6 +9,12 @@ function normalizePlan(parsed: Partial<PlanState>): PlanState {
   const base = emptyPlan();
   const plan = { ...base, ...parsed, serveLines: parsed.serveLines ?? [] };
   const cleanRetainer = (name?: string) => (name && SHEET_RETAINERS.has(name) ? name : "");
+  // migrate old per-line best-seller flags into the weekly best-seller set
+  if ((plan.bestSellers ?? []).length === 0) {
+    const marked = new Set<string>();
+    for (const l of [...plan.craftLines, ...plan.serveLines]) if (l.bestSeller && l.productName) marked.add(l.productName);
+    plan.bestSellers = [...marked];
+  }
   return {
     ...plan,
     craftLines: plan.craftLines.map((l) => ({ ...l, retainer: cleanRetainer(l.retainer) })),

@@ -108,7 +108,7 @@ export interface LevelSlots {
  */
 export function slotsForLevel(level: number): LevelSlots {
   const cook = level >= 7 ? 4 : level >= 6 ? 3 : level >= 4 ? 2 : 1;
-  const cater = level >= 6 ? 6 : level >= 4 ? 4 : 2;
+  const cater = level >= 7 ? 7 : level >= 6 ? 6 : level >= 4 ? 4 : 2;
   const kiln = level >= 6 ? 4 : level >= 4 ? 3 : level >= 3 ? 2 : 1;
   const brew = level >= 7 ? 8 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
   const gather = level >= 7 ? 4 : level >= 6 ? 3 : level >= 4 ? 2 : 1;

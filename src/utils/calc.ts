@@ -136,7 +136,7 @@ export function calcCraftLine(line: CraftLine, plan: PlanState): CraftLineCalc {
   const level = seatLevels[0] ?? 0;
   const active = !!product && seatLevels.length > 0;
   const outPerHr = product ? seatLevels.reduce((s, lv) => s + outputPerHr(product.job, lv, base, wps), 0) : 0;
-  const inn = product ? innPrice(product, line.bestSeller || isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
+  const inn = product ? innPrice(product, isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
   const trade = product ? tradePrice(product, activeOverrides(plan)) : 0;
   const revenuePerHr = outPerHr * inn;
   const inputCostPerHr = outPerHr * (product?.inputCost ?? 0);
@@ -258,7 +258,7 @@ export function calcServeLine(line: ServeLine, plan: PlanState): ServeLineCalc {
   const level = validProduct ? retainerJobLevel(line.retainer, "Catering", plan.retainerLevels) : 0;
   const active = validProduct && level > 0;
   const servedPerHr = active ? outputPerHr("Catering", level, baseRate("Catering", plan)) : 0;
-  const price = product ? innPrice(product, line.bestSeller || isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
+  const price = product ? innPrice(product, isWeeklyBest(product.name, plan), activeOverrides(plan)) : 0;
   return {
     line,
     product,
@@ -280,7 +280,7 @@ export function computeServe(plan: PlanState): ServeResult {
     if (c.product.type !== "Dish" && c.product.type !== "Wine") continue;
     const cur = (produced[c.product.name] ??= { qty: 0, bs: false });
     cur.qty += c.outPerHr;
-    cur.bs = cur.bs || line.bestSeller || isWeeklyBest(c.product.name, plan);
+    cur.bs = cur.bs || isWeeklyBest(c.product.name, plan);
   }
 
   const lineCalcs = (plan.serveLines ?? []).map((line) => calcServeLine(line, plan));
@@ -1081,7 +1081,7 @@ export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
     const c = calcCraftLine(line, plan);
     if (!c.product || !c.active) continue;
     rate[c.product.name] = (rate[c.product.name] ?? 0) + c.outPerHr;
-    if (line.bestSeller || isWeeklyBest(c.product.name, plan)) bs[c.product.name] = true;
+    if (isWeeklyBest(c.product.name, plan)) bs[c.product.name] = true;
   }
   const out: ProducedItem[] = [];
   for (const name of Object.keys(rate)) {
