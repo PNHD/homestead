@@ -1078,22 +1078,26 @@ export function buildWeeklyPlan(plan: PlanState): WeeklyPlan {
   };
 }
 
-// ---- trade tracker -------------------------------------------------------
-export interface ProducedItem {
+// ---- sell / trade ---------------------------------------------------------
+export interface SellItem {
   name: string;
-  ratePerHr: number; // combined output across all active lines making it
-  hours: number; // time accumulated since last "sold" reset
-  units: number; // ratePerHr * hours
-  innValue: number; // units * inn price
-  tradeValue: number; // units * trade price
+  onHand: number; // units currently in inventory (hand-entered)
+  ratePerHr: number; // production rate, 0 if you don't make it — info only
+  tradePrice: number; // manual NPC sale price (per unit)
+  innPrice: number; // auto Inn sale price (per unit)
+  tradeValue: number; // onHand * tradePrice
+  innValue: number; // onHand * innPrice
   bestSeller: boolean;
+  priced: boolean; // false = no known price yet (set one to value it)
 }
 
 /**
- * How much of each finished product has piled up since it was last marked sold,
- * plus the money it is worth via the Inn (auto) and Trade for Profit (manual).
+ * Everything in your inventory that you can sell, valued at its NPC Trade price
+ * (manual) and Inn price (auto). Inventory-driven so ANY stocked item shows up —
+ * crops and raw materials included, not just finished goods. Raw materials have
+ * no price in the sheets, so set one in the Trade $ box to value them.
  */
-export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
+export function computeSellables(plan: PlanState): SellItem[] {
   const rate: Record<string, number> = {};
   const bs: Record<string, boolean> = {};
   for (const line of plan.craftLines) {
@@ -1102,23 +1106,28 @@ export function computeProduced(plan: PlanState, now: number): ProducedItem[] {
     rate[c.product.name] = (rate[c.product.name] ?? 0) + c.outPerHr;
     if (isWeeklyBest(c.product.name, plan)) bs[c.product.name] = true;
   }
-  const out: ProducedItem[] = [];
-  for (const name of Object.keys(rate)) {
+  const ov = activeOverrides(plan);
+  const names = new Set<string>([...Object.keys(plan.inventory), ...Object.keys(rate)]);
+  const out: SellItem[] = [];
+  for (const name of names) {
+    const onHand = plan.inventory[name] ?? 0;
+    if (onHand <= 0 && !(rate[name] > 0)) continue;
     const p = PRODUCT_BY_NAME[name];
-    const anchor = plan.soldAt[name] ?? plan.trackingSince ?? now;
-    const hours = Math.max(0, (now - anchor) / 3_600_000);
-    const units = rate[name] * hours;
+    const tp = ov[name]?.trade ?? p?.merchant ?? 0;
+    const ip = p ? innPrice(p, !!bs[name], ov) : ov[name]?.inn ?? 0;
     out.push({
       name,
-      ratePerHr: rate[name],
-      hours,
-      units,
-      innValue: units * innPrice(p, !!bs[name], activeOverrides(plan)),
-      tradeValue: units * tradePrice(p, activeOverrides(plan)),
+      onHand,
+      ratePerHr: rate[name] ?? 0,
+      tradePrice: tp,
+      innPrice: ip,
+      tradeValue: onHand * tp,
+      innValue: onHand * ip,
       bestSeller: !!bs[name],
+      priced: tp > 0 || ip > 0,
     });
   }
-  return out.sort((a, b) => b.tradeValue - a.tradeValue);
+  return out.sort((a, b) => b.tradeValue - a.tradeValue || b.innValue - a.innValue || b.onHand - a.onHand);
 }
 
 // ---- paste helpers -------------------------------------------------------
